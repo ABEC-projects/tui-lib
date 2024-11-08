@@ -1,24 +1,27 @@
-use std::sync::{Arc, Mutex};
-
-use super::tty;
+use crate::tty::Tty;
 
 
 #[allow(dead_code)]
-pub struct Pane {
-    tty: Arc<Mutex<tty::Tty>>,
+pub struct Pane<'t> {
+    tty: &'t Tty,
     size: Size,
     position: Pos,
 }
 
-impl Pane {
+impl <'t> Pane <'t>{
+    pub fn new <'a:'t>(tty: &'a mut Tty, size: Size, pos: Pos) -> Self {
+        let mut pane: Self = tty.into();
+        pane.size = size;
+        pane.position = pos;
+        pane
+    }
 }
 
-impl From<tty::Tty> for Pane {
-    fn from(mut value: tty::Tty) -> Self {
+impl <'a:'t, 't> From<&'a mut Tty> for Pane <'t> {
+    fn from(value: &'a mut Tty) -> Self {
         let size = Size::from(value.size().unwrap());
         let position = Pos {row: 0, col: 0};
-        let tty = Arc::new(Mutex::new(value));
-        Self { tty, size, position }
+        Self { tty: value, size, position }
     }
 }
 
@@ -37,6 +40,8 @@ impl From<nix::libc::winsize> for Size {
     }
 }
 
+/// Represents position of upper-left corner of `Pane`
+/// zero-indexed
 #[allow(dead_code)]
 pub struct Pos {
     row: usize,
