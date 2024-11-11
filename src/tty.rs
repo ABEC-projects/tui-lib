@@ -6,7 +6,7 @@ use nix::libc::ioctl;
 use nix::sys::termios::Termios;
 use nix::{libc::{VMIN, VTIME}, sys::termios::{tcgetattr, tcsetattr, ControlFlags, InputFlags, LocalFlags, OutputFlags, SetArg}};
 
-type Result<T> = std::result::Result<T, TtyError>;
+pub type Result<T> = std::result::Result<T, TtyError>;
 
 #[derive(Debug)]
 pub struct Tty {
@@ -135,4 +135,4 @@ impl Write for Tty {
 
 
 #[derive(Debug)]
-pub enum TtyError {}
+pub struct  TtyError {}
