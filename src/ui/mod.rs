@@ -1,2 +1,186 @@
 pub mod pane;
-pub mod tui;
+
+use crate::tty::{Tty, self};
+use crate::utils::{ArenaAlloc, ArenaHandle};
+
+type AnchorArenaHandle = ArenaHandle<(Anchor, Option<RectHandle>)>;
+
+pub struct Tui {
+    pub tty: Tty,
+    anchors: ArenaAlloc<(Anchor, Option<RectHandle>)>,
+    size: Rect,
+}
+
+impl Tui {
+
+    pub fn new() -> tty::Result<Self> {
+        let mut tty = Tty::new()?;
+        let size: Rect = tty.size()?.into();
+        let anchors = ArenaAlloc::new();
+        Ok( Self {
+            tty,
+            anchors,
+            size,
+        })
+    }
+
+
+    pub fn add_anchor_in(&mut self, anchor: Anchor, relative_to: RectHandle) -> AnchorHandle {
+        let handle = self.anchors.insert((anchor, Some(relative_to)));
+        AnchorHandle::new(handle)
+    }
+
+    pub fn add_anchor(&mut self, anchor: Anchor,) -> AnchorHandle {
+        self.anchors.insert((anchor, None)).into()
+    }
+
+    pub fn add_rect(&mut self, upper_left: &AnchorHandle, down_right: &AnchorHandle) -> RectHandle {
+        RectHandle::new(&upper_left.raw, &down_right.raw)
+    }
+    
+    pub fn get_cords_of_anchor(&self, handle: &AnchorHandle) -> Cords {
+        self.raw_get_cords_of_anchor(&handle.raw)
+    }
+
+    fn raw_get_cords_of_anchor(&self, handle: &AnchorArenaHandle) -> Cords {
+        let (anchor, rect) = self.anchors.get(handle).unwrap();
+        let rect = match rect {
+            Some(rh) => {
+                let upper_left = self.raw_get_cords_of_anchor(&rh.upper_left.clone());
+                let down_right = self.raw_get_cords_of_anchor(&rh.down_right.clone());
+                Rect::new(upper_left, down_right)
+            },
+            None => self.size.clone(),
+        };
+        let col = match anchor.col_offset {
+            Offset::Absolute(i) if !anchor.from_right => rect.upper_left.col.saturating_add_signed(i).clamp(0, self.size.down_right.col),
+            Offset::Absolute(i) if anchor.from_right => rect.down_right.col.saturating_add_signed(-i).clamp(0, self.size.down_right.col),
+            Offset::Relative(f) if !anchor.from_down => (rect.down_right.col as f32 * f).clamp(0., self.size.down_right.col as f32) as usize,
+            Offset::Relative(f) if anchor.from_down => (rect.down_right.col as f32 * (1.-f)).clamp(0., self.size.down_right.col as f32) as usize,
+            _ => unreachable!()
+        };
+        let row = match anchor.row_offset {
+            Offset::Absolute(i) if !anchor.from_right => rect.upper_left.row.saturating_add_signed(i)
+                .clamp(0, self.size.down_right.row),
+                
+            Offset::Absolute(i) if anchor.from_right => rect.down_right.row.saturating_add_signed(-i)
+                .clamp(0, self.size.down_right.row),
+
+            Offset::Relative(f) if !anchor.from_down =>
+                (rect.down_right.row as f32 + (rect.upper_left.row - rect.down_right.row) as f32 * f)
+                .clamp(0., self.size.down_right.row as f32) as usize,
+
+            Offset::Relative(f) if anchor.from_down =>
+                (rect.down_right.row as f32 + (rect.upper_left.row - rect.down_right.row) as f32 * (1.-f))
+                .clamp(0., self.size.down_right.row as f32) as usize,
+
+            _ => unreachable!()
+        };
+        Cords {row, col}
+    }
+
+    pub fn update_size(&mut self) -> tty::Result<()> {
+        self.size = self.tty.size()?.into();
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Anchor {
+    col_offset: Offset,
+    from_right: bool,
+    row_offset: Offset,
+    from_down: bool,
+}
+
+impl Anchor {
+    pub fn new(col_offset: Offset, from_right: bool, row_offset: Offset, from_down: bool) -> Self {
+        Self { col_offset, from_right, row_offset, from_down }
+    }
+
+    pub fn new_abs_from_upper_left (col: isize, row: isize) -> Self {
+        Self { col_offset: Offset::Absolute(col), from_right: false, row_offset: Offset::Absolute(row), from_down: false }
+    }
+
+    pub fn new_abs_from_down_right (col: isize, row: isize) -> Self {
+        Self { col_offset: Offset::Absolute(col), from_right: true, row_offset: Offset::Absolute(row), from_down: true }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Offset {
+    Absolute(isize),
+    Relative(f32),
+}
+
+pub struct AnchorHandle {
+    raw: AnchorArenaHandle,
+}
+
+impl AnchorHandle {
+    fn new(handle: AnchorArenaHandle) -> Self {
+        Self { raw: handle }
+    }
+}
+
+impl From<AnchorArenaHandle> for AnchorHandle {
+    fn from(val: AnchorArenaHandle) -> Self {
+        AnchorHandle { raw: val }
+    }
+}
+
+impl From<AnchorHandle> for AnchorArenaHandle {
+    fn from(value: AnchorHandle) -> Self {
+        value.raw
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Cords {
+    pub col: usize,
+    pub row: usize,
+}
+
+impl Cords {
+    pub fn new(col: usize, row: usize) -> Self {
+        Self {col, row}
+    }
+}
+
+impl Cords {
+    pub const ZERO: Self = Self {col: 0, row: 0};
+}
+
+
+#[derive(Clone, Debug)]
+pub struct Rect {
+    pub upper_left: Cords,
+    pub down_right: Cords,
+}
+
+impl Rect {
+    pub fn new(upper_left: Cords, down_right: Cords) -> Self {
+        Self { upper_left, down_right }
+    }
+}
+
+impl From<nix::libc::winsize> for Rect {
+    fn from(value: nix::libc::winsize) -> Self {
+        let (col, row): (usize, usize) = (value.ws_col.into(), value.ws_row.into());
+        Self { upper_left: Cords::ZERO, down_right: Cords::new(col-1, row-1)}
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RectHandle {
+    upper_left: AnchorArenaHandle,
+    down_right: AnchorArenaHandle,
+}
+
+impl RectHandle {
+    fn new(upper_left: &AnchorArenaHandle, down_right: &AnchorArenaHandle) -> Self {
+        Self { upper_left: upper_left.clone(), down_right: down_right.clone() }
+    }
+}
+
+

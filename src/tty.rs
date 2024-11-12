@@ -90,6 +90,11 @@ impl Tty {
         Ok(())
     }
 
+    pub fn clean(&mut self) -> Result<()> {
+        self.write_all(b"\x1B[2J").unwrap();
+        Ok(())
+    }
+
     pub fn size(&mut self) -> Result<nix::libc::winsize> {
         let mut buf = nix::libc::winsize{ws_row:0, ws_col:0, ws_xpixel:0, ws_ypixel:0};
         unsafe { ioctl(self.raw.as_raw_fd(), nix::libc::TIOCGWINSZ, &mut buf)};
