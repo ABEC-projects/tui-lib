@@ -39,8 +39,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui"
+name = "nixtui"
 version = "0.1.0"
 dependencies = [
  "nix",
+ "nixtui-allocator",
 ]
+
+[[package]]
+name = "nixtui-allocator"
+version = "0.1.0"

@@ -1,6 +1,4 @@
-pub mod pane;
-
-use crate::utils::{ArenaAlloc, ArenaHandle};
+use nixtui_allocator::{ArenaAlloc, ArenaHandle};
 
 type AnchorArenaHandle = ArenaHandle<(Anchor, Option<RectHandle>)>;
 
