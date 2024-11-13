@@ -1,32 +1,28 @@
 pub mod pane;
 
-use crate::tty::{Tty, self};
 use crate::utils::{ArenaAlloc, ArenaHandle};
 
 type AnchorArenaHandle = ArenaHandle<(Anchor, Option<RectHandle>)>;
 
-pub struct Tui {
-    pub tty: Tty,
+
+pub struct Tui  {
     anchors: ArenaAlloc<(Anchor, Option<RectHandle>)>,
     size: Rect,
 }
 
 impl Tui {
 
-    pub fn new() -> tty::Result<Self> {
-        let mut tty = Tty::new()?;
-        let size: Rect = tty.size()?.into();
+    pub fn new(size: Rect) -> Self {
         let anchors = ArenaAlloc::new();
-        Ok( Self {
-            tty,
+        Self {
             anchors,
             size,
-        })
+        }
     }
 
 
-    pub fn add_anchor_in(&mut self, anchor: Anchor, relative_to: RectHandle) -> AnchorHandle {
-        let handle = self.anchors.insert((anchor, Some(relative_to)));
+    pub fn add_anchor_in(&mut self, anchor: Anchor, relative_to: &RectHandle) -> AnchorHandle {
+        let handle = self.anchors.insert((anchor, Some(relative_to.clone())));
         AnchorHandle::new(handle)
     }
 
@@ -35,11 +31,11 @@ impl Tui {
     }
 
     pub fn add_rect(&mut self, upper_left: &AnchorHandle, down_right: &AnchorHandle) -> RectHandle {
-        RectHandle::new(&upper_left.raw, &down_right.raw)
+        RectHandle::new(&upper_left.0, &down_right.0)
     }
     
     pub fn get_cords_of_anchor(&self, handle: &AnchorHandle) -> Cords {
-        self.raw_get_cords_of_anchor(&handle.raw)
+        self.raw_get_cords_of_anchor(&handle.0)
     }
 
     fn raw_get_cords_of_anchor(&self, handle: &AnchorArenaHandle) -> Cords {
@@ -53,10 +49,20 @@ impl Tui {
             None => self.size.clone(),
         };
         let col = match anchor.col_offset {
-            Offset::Absolute(i) if !anchor.from_right => rect.upper_left.col.saturating_add_signed(i).clamp(0, self.size.down_right.col),
-            Offset::Absolute(i) if anchor.from_right => rect.down_right.col.saturating_add_signed(-i).clamp(0, self.size.down_right.col),
-            Offset::Relative(f) if !anchor.from_down => (rect.down_right.col as f32 * f).clamp(0., self.size.down_right.col as f32) as usize,
-            Offset::Relative(f) if anchor.from_down => (rect.down_right.col as f32 * (1.-f)).clamp(0., self.size.down_right.col as f32) as usize,
+            Offset::Absolute(i) if !anchor.from_right => rect.upper_left.col.saturating_add_signed(i)
+                .clamp(0, self.size.down_right.col),
+                
+            Offset::Absolute(i) if anchor.from_right => rect.down_right.col.saturating_add_signed(-i)
+                .clamp(0, self.size.down_right.col),
+
+            Offset::Relative(f) if !anchor.from_down =>
+                (rect.upper_left.col as f32 + (rect.down_right.col.saturating_sub(rect.upper_left.col)) as f32 * f)
+                .clamp(0., self.size.down_right.col as f32) as usize,
+
+            Offset::Relative(f) if anchor.from_down =>
+                (rect.upper_left.col as f32 + (rect.down_right.col.saturating_sub(rect.upper_left.col)) as f32 * (1.-f))
+                .clamp(0., self.size.down_right.col as f32) as usize,
+
             _ => unreachable!()
         };
         let row = match anchor.row_offset {
@@ -67,11 +73,11 @@ impl Tui {
                 .clamp(0, self.size.down_right.row),
 
             Offset::Relative(f) if !anchor.from_down =>
-                (rect.down_right.row as f32 + (rect.upper_left.row - rect.down_right.row) as f32 * f)
+                (rect.upper_left.row as f32 + (rect.down_right.row.saturating_sub(rect.upper_left.row)) as f32 * f)
                 .clamp(0., self.size.down_right.row as f32) as usize,
 
             Offset::Relative(f) if anchor.from_down =>
-                (rect.down_right.row as f32 + (rect.upper_left.row - rect.down_right.row) as f32 * (1.-f))
+                (rect.upper_left.row as f32 + (rect.down_right.row.saturating_sub(rect.upper_left.row)) as f32 * (1.-f))
                 .clamp(0., self.size.down_right.row as f32) as usize,
 
             _ => unreachable!()
@@ -79,9 +85,8 @@ impl Tui {
         Cords {row, col}
     }
 
-    pub fn update_size(&mut self) -> tty::Result<()> {
-        self.size = self.tty.size()?.into();
-        Ok(())
+    pub fn update_size(&mut self, size: Rect) {
+        self.size = size;
     }
 }
 
@@ -105,6 +110,14 @@ impl Anchor {
     pub fn new_abs_from_down_right (col: isize, row: isize) -> Self {
         Self { col_offset: Offset::Absolute(col), from_right: true, row_offset: Offset::Absolute(row), from_down: true }
     }
+
+    pub fn new_rel_from_down_right (col: f32, row: f32) -> Self {
+        Self { col_offset: Offset::Relative(col), from_right: true, row_offset: Offset::Relative(row), from_down: true }
+    }
+
+    pub fn new_rel_from_upper_left (col: f32, row: f32) -> Self {
+        Self { col_offset: Offset::Relative(col), from_right: false, row_offset: Offset::Relative(row), from_down: false }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -113,25 +126,23 @@ pub enum Offset {
     Relative(f32),
 }
 
-pub struct AnchorHandle {
-    raw: AnchorArenaHandle,
-}
+pub struct AnchorHandle (AnchorArenaHandle,);
 
 impl AnchorHandle {
     fn new(handle: AnchorArenaHandle) -> Self {
-        Self { raw: handle }
+        Self (handle)
     }
 }
 
 impl From<AnchorArenaHandle> for AnchorHandle {
     fn from(val: AnchorArenaHandle) -> Self {
-        AnchorHandle { raw: val }
+        AnchorHandle(val)
     }
 }
 
 impl From<AnchorHandle> for AnchorArenaHandle {
     fn from(value: AnchorHandle) -> Self {
-        value.raw
+        value.0
     }
 }
 
@@ -149,6 +160,12 @@ impl Cords {
 
 impl Cords {
     pub const ZERO: Self = Self {col: 0, row: 0};
+}
+
+impl From<(usize, usize)> for Cords {
+    fn from(value: (usize, usize)) -> Self {
+        Self { col: value.0, row: value.1 }
+    }
 }
 
 
@@ -182,5 +199,3 @@ impl RectHandle {
         Self { upper_left: upper_left.clone(), down_right: down_right.clone() }
     }
 }
-
-
