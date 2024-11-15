@@ -3,12 +3,12 @@ use nixtui_allocator::{ArenaAlloc, ArenaHandle};
 type AnchorArenaHandle = ArenaHandle<(Anchor, Option<RectHandle>)>;
 
 
-pub struct Tui  {
+pub struct TuiAnchors  {
     anchors: ArenaAlloc<(Anchor, Option<RectHandle>)>,
     size: Rect,
 }
 
-impl Tui {
+impl TuiAnchors {
 
     pub fn new(size: Rect) -> Self {
         let anchors = ArenaAlloc::new();
