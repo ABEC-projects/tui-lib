@@ -3,12 +3,12 @@ use std::fmt::Debug;
 
 
 #[derive(Debug, Clone)]
-pub struct ArenaAlloc <T: Clone + Debug> {
+pub struct ArenaAlloc <T: Clone> {
     items: Vec<ArenaItem<T>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ArenaItem <T: Clone + Debug> {
+pub struct ArenaItem <T: Clone> {
     inner: T,
     alive: bool,
     generation: usize,
@@ -21,19 +21,19 @@ pub struct ArenaHandle <T> {
     _marker: std::marker::PhantomData<T>,
 }
 
-impl <T: Clone + Debug> ArenaHandle<T> {
+impl <T: Clone> ArenaHandle<T> {
     pub fn new(index: usize, generation: usize) -> Self {
         Self {index, generation, _marker: std::marker::PhantomData}
     }
 }
 
-impl <T: Clone + Debug> ArenaItem<T> {
+impl <T: Clone> ArenaItem<T> {
     pub fn new(item: T) -> Self {
         Self { inner: item, alive: true, generation: 0 }
     }
 }
 
-impl <T: Clone + Debug> ArenaAlloc<T> {
+impl <T: Clone> ArenaAlloc<T> {
     
     pub fn new() -> Self {
         Self { items: Vec::new() }
@@ -69,10 +69,25 @@ impl <T: Clone + Debug> ArenaAlloc<T> {
             None
         }
     }
+
+    pub fn get_mut(&mut self, handle: &ArenaHandle<T>) -> Option<&mut T> {
+        let item = self.items.get_mut(handle.index)?;
+        if item.generation == handle.generation {
+            Some(&mut item.inner)
+        } else {
+            None
+        }
+    }
 }
 
-impl <T: Clone + Debug> Default for ArenaAlloc<T> {
+impl <T: Clone> Default for ArenaAlloc<T> {
     fn default() -> Self {
         Self::new()
     }
 }
+
+// impl <T: Clone + Debug> Debug for ArenaAlloc<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         
+//     }
+// }
