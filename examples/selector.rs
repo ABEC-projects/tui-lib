@@ -1,5 +1,5 @@
 use nix::{libc::{VMIN, VTIME}, sys::termios::SetArg};
-use tui::tty::Tty;
+use nixtui::tty::Tty;
 use std::io::{Read, Write};
 
 fn main() {
