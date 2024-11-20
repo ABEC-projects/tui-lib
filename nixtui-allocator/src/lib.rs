@@ -1,14 +1,15 @@
+pub mod multy_arena;
 use std::fmt::Debug;
 
 
 
 #[derive(Debug, Clone)]
-pub struct ArenaAlloc <T: Clone> {
+pub struct ArenaAlloc <T> {
     items: Vec<ArenaItem<T>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ArenaItem <T: Clone> {
+pub struct ArenaItem <T> {
     inner: T,
     alive: bool,
     generation: usize,
@@ -21,19 +22,19 @@ pub struct ArenaHandle <T> {
     _marker: std::marker::PhantomData<T>,
 }
 
-impl <T: Clone> ArenaHandle<T> {
-    pub fn new(index: usize, generation: usize) -> Self {
+impl <T> ArenaHandle<T> {
+    fn new(index: usize, generation: usize) -> Self {
         Self {index, generation, _marker: std::marker::PhantomData}
     }
 }
 
-impl <T: Clone> ArenaItem<T> {
-    pub fn new(item: T) -> Self {
+impl <T> ArenaItem<T> {
+    fn new(item: T) -> Self {
         Self { inner: item, alive: true, generation: 0 }
     }
 }
 
-impl <T: Clone> ArenaAlloc<T> {
+impl <T> ArenaAlloc<T> {
     
     pub fn new() -> Self {
         Self { items: Vec::new() }
@@ -63,7 +64,7 @@ impl <T: Clone> ArenaAlloc<T> {
 
     pub fn get(&self, handle: &ArenaHandle<T>) -> Option<&T> {
         let item = self.items.get(handle.index)?;
-        if item.generation == handle.generation {
+        if item.generation == handle.generation && item.alive {
             Some(&item.inner)
         } else {
             None
@@ -72,22 +73,20 @@ impl <T: Clone> ArenaAlloc<T> {
 
     pub fn get_mut(&mut self, handle: &ArenaHandle<T>) -> Option<&mut T> {
         let item = self.items.get_mut(handle.index)?;
-        if item.generation == handle.generation {
+        if item.generation == handle.generation && item.alive {
             Some(&mut item.inner)
         } else {
             None
         }
     }
+
+    pub fn remove(&mut self, handle: ArenaHandle<T>) {
+        self.items[handle.index].alive = false;
+    }
 }
 
-impl <T: Clone> Default for ArenaAlloc<T> {
+impl <T> Default for ArenaAlloc<T> {
     fn default() -> Self {
         Self::new()
     }
 }
-
-// impl <T: Clone + Debug> Debug for ArenaAlloc<T> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         
-//     }
-// }
