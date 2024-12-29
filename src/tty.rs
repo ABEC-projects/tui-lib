@@ -1,3 +1,7 @@
+pub mod input;
+pub mod constants;
+
+use std::error::Error;
 use std::os::fd::AsRawFd;
 use std::{fs::File, os::fd::AsFd};
 use std::io::{Read, Write};
@@ -8,10 +12,11 @@ use nix::{libc::{VMIN, VTIME}, sys::termios::{tcgetattr, tcsetattr, ControlFlags
 
 pub type Result<T> = std::result::Result<T, TtyError>;
 
+
 #[derive(Debug)]
-pub struct Tty {
+pub struct Tty  {
     pub raw: File,
-    orig_termios: Termios
+    orig_termios: Termios,
 }
 
 impl Tty {
@@ -30,24 +35,43 @@ impl Tty {
         Ok(tcgetattr(self.raw.as_fd()).unwrap())
     }
 
-    pub fn write_termios(&mut self, termios: Termios, mode: SetArg) -> Result<()>{
+    pub fn write_termios(&mut self, termios: Termios, mode: SetArg) -> Result<()> {
         tcsetattr(self.raw.as_fd(), mode, &termios).unwrap();
         Ok(())
     }
 
 
-    pub fn uncook (&mut self) -> Result<()>{
+    pub fn uncook (&mut self) -> Result<()> {
         let ttyfd = self.raw.as_fd();
         let mut termios = self.orig_termios.clone();
+        println!("{:?}", self.orig_termios);
+        // According to https://www.man7.org/linux/man-pages/man3/termios.3.html `Raw mode` section
         {
-            let lflags = LocalFlags::ECHO | LocalFlags::ICANON 
-                | LocalFlags::IEXTEN | LocalFlags::ISIG;
-            termios.local_flags &= !lflags;
-            let iflags = InputFlags::IXON | InputFlags::ICRNL | InputFlags::BRKINT
-                | InputFlags::INPCK | InputFlags::ISTRIP;
-            termios.input_flags &= iflags;
-            let oflags = OutputFlags::OPOST;
-            termios.output_flags |= oflags;
+            termios.input_flags &= !(
+                InputFlags::IGNBRK
+                | InputFlags::BRKINT
+                | InputFlags::PARMRK
+                | InputFlags::ISTRIP
+                | InputFlags::ICRNL 
+                | InputFlags::IGNCR
+                | InputFlags::ICRNL
+                | InputFlags::IXON 
+            );
+
+            termios.output_flags &= !OutputFlags::OPOST;
+
+            termios.local_flags &= !(
+                LocalFlags::ECHO
+                | LocalFlags::ECHONL
+                | LocalFlags::ICANON 
+                | LocalFlags::ISIG
+                | LocalFlags::IEXTEN
+            );
+
+            termios.control_flags &= !(
+                ControlFlags::CSIZE
+                | ControlFlags::PARENB
+            );
             termios.control_flags |= ControlFlags::CS8;
             termios.control_chars[VTIME] = 0;
             termios.control_chars[VMIN] = 1;
@@ -115,7 +139,7 @@ impl Tty {
     }
 }
 
-impl Write for Tty {
+impl Write for Tty  {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.raw.write(buf)
     }
@@ -123,9 +147,9 @@ impl Write for Tty {
         self.raw.flush()
     }
     fn by_ref(&mut self) -> &mut Self
-        where
-            Self: Sized, {
-                self
+        where Self: Sized, 
+    {
+        self
     }
     fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
         self.raw.write_all(buf)
@@ -140,4 +164,22 @@ impl Write for Tty {
 
 
 #[derive(Debug)]
-pub struct  TtyError {}
+pub struct  TtyError {
+    kind: Kind,
+    value: Box<dyn Error + Send + Sync>
+}
+
+#[derive(Debug)]
+pub enum Kind {
+    IOError,
+}
+
+impl From<std::io::Error> for TtyError {
+    fn from(val: std::io::Error) -> Self {
+        TtyError {
+            kind: Kind::IOError,
+            value: Box::new(val)
+        }
+    }
+}
+
