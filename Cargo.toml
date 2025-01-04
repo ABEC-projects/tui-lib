@@ -17,3 +17,4 @@ path = "examples/anchors.rs"
 [dependencies]
 nix = { version = "0.29.0", features = ["ioctl", "term"] }
 nixtui-allocator = { path = "nixtui-allocator"}
+terminfo = "0.9.0"
