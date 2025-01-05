@@ -143,93 +143,87 @@ impl InputParser {
         while let Some((i, byte)) = iter.next() {
             let byte = *byte;
             events.push(match byte {
-                0x1B => {
-                    match input.get(i+1) {
-                        Some(next) => {
-                            let i = i + 1;
-                            let next = *next;
-                            match next {
-                                b'[' | b'O' => {
-                                    if let Some(slice) = input.get((i+1)..) {
-                                        if let Some((command, len)) = CSICommand::parse(slice) {
-                                            iter.nth(len);
-                                            if let Some(code) = self.mappings.match_csi(&command) {
-                                                let mods = 'm: {match command.get_final() {
-                                                    b'A'..=b'Z' | b'~' => {
-                                                        if let Some(bytes) = command.get_parameter().split(|b|*b==b';').nth(1) {
-                                                            let mut num = 0;
-                                                            if bytes.len() > 3 {
-                                                                break 'm Modifiers::NONE;
-                                                            }
-                                                            for (i, dig) in bytes.iter().rev().enumerate() {
-                                                                if !(48..58).contains(dig) {
-                                                                    break 'm Modifiers::NONE;
-                                                                }
-                                                                num += (dig-48)*10_u8.pow(i as u32)
-                                                            }
-                                                            Modifiers::new(num-1)
-                                                        } else {
-                                                            Modifiers::NONE
-                                                        }
-                                                    },
-                                                    _ => Modifiers::NONE,
-                                                }};
-                                                KeyEvent {
-                                                    key_code: code.into(),
-                                                    mods,
-                                                    ..Default::default()
+                0x1B if {
+                    let next = input.get(i+1);
+                    next == Some(&b'[') || next == Some(&b'O')
+                } => {
+                    let i = i + 1;
+                    let next = *input.get(i).unwrap();
+                    if let Some(slice) = input.get((i+1)..) {
+                        if let Some((command, len)) = CSICommand::parse(slice) {
+                            iter.nth(len);
+                            if let Some(code) = self.mappings.match_csi(&command) {
+                                let mods = 'm: {match command.get_final() {
+                                    b'A'..=b'Z' | b'~' => {
+                                        if let Some(bytes) = command.get_parameter().split(|b|*b==b';').nth(1) {
+                                            let mut num = 0;
+                                            if bytes.len() > 3 {
+                                                break 'm Modifiers::NONE;
+                                            }
+                                            for (i, dig) in bytes.iter().rev().enumerate() {
+                                                if !(48..58).contains(dig) {
+                                                    break 'm Modifiers::NONE;
                                                 }
-                                            } else {
-                                                continue;
+                                                num += (dig-48)*10_u8.pow(i as u32)
                                             }
-                                        } else if next == b'[' {
-                                            iter.next();
-                                            KeyEvent {
-                                                key_code: b'['.into(),
-                                                mods: Modifiers::ALT,
-                                                ..Default::default()
-                                            }
+                                            Modifiers::new(num-1)
                                         } else {
-                                            iter.next();
-                                            continue;
+                                            Modifiers::NONE
                                         }
-                                    } else if next == b'[' {
-                                        iter.next();
-                                        KeyEvent {
-                                            key_code: b'['.into(),
-                                            mods: Modifiers::ALT,
-                                            ..Default::default()
-                                        }
-                                    } else {
-                                        break;
-                                    }
-                                },
-                                0x20..=0x7E => {
-                                    iter.next();
-                                    KeyEvent {
-                                        key_code: next.into(),
-                                        mods: Modifiers::ALT,
-                                        ..Default::default()
-                                    }
-                                },
-                                _ => {
-                                    KeyEvent {
-                                        key_code: 0x1B_u8.into(),
-                                        ..Default::default()
-                                    }
+                                    },
+                                    _ => Modifiers::NONE,
+                                }};
+                                KeyEvent {
+                                    key_code: code.into(),
+                                    mods,
+                                    ..Default::default()
                                 }
+                            } else {
+                                continue;
                             }
-                        },
-                        None => {
+                        } else if next == b'[' {
+                            iter.next();
                             KeyEvent {
-                                key_code: 0x1B_u8.into(),
+                                key_code: b'['.into(),
+                                mods: Modifiers::ALT,
                                 ..Default::default()
                             }
+                        } else {
+                            iter.next();
+                            continue;
                         }
+                    } else if next == b'[' {
+                        iter.next();
+                        KeyEvent {
+                            key_code: b'['.into(),
+                            mods: Modifiers::ALT,
+                            ..Default::default()
+                        }
+                    } else {
+                        break;
                     }
                 },
+                0x1B if {
+                    let next = input.get(i+1);
+                    if next.is_none() {
+                        false
+                    }else {
+                        let next = next.unwrap();
+                        (0x0..=0x40).contains(next) || (0x5B..=0x7E).contains(next)                     }
+                } => {
+                    let next = *iter.next().unwrap().1;
+                    KeyEvent {
+                        key_code: next.into(),
+                        mods: Modifiers::ALT,
+                        ..Default::default()
+                    }
+                },
+                0x1B => KeyEvent{
+                    key_code: 0x1B_u8.into(),
+                    ..Default::default()
+                },
                 // ASCII
-                0..=0x7F => {
+                0..0x1B | 0x1C..=0x7F => {
                     KeyEvent {
                         key_code: byte.into(),
                         ..Default::default()
