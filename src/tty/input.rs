@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use terminfo::Database;
 
 macro_rules! call_multiple {
@@ -147,24 +149,35 @@ impl InputParser {
                             let i = i + 1;
                             let next = *next;
                             match next {
-                                b'a'..=b'z' => {
-                                    iter.next();
-                                    KeyEvent {
-                                        key_code: next.into(),
-                                        mods: Modifiers::ALT,
-                                        ..Default::default()
-                                    }
-                                },
                                 b'[' | b'O' => {
                                     iter.next();
                                     if let Some(slice) = input.get((i+1)..) {
                                         if let Some((command, len)) = CSICommand::parse(slice) {
                                             iter.nth(len-1);
-                                            if let Some(code) = self.mappings.match_csi(command) {
-                                                // todo!
-                                                // process the mod keys
+                                            if let Some(code) = self.mappings.match_csi(&command) {
+                                                let mods = 'm: {match command.get_final() {
+                                                    b'A'..=b'Z' | b'~' => {
+                                                        if let Some(bytes) = command.get_parameter().split(|b|*b==b';').nth(1) {
+                                                            let mut num = 0;
+                                                            if bytes.len() > 3 {
+                                                                break 'm Modifiers::NONE;
+                                                            }
+                                                            for (i, dig) in bytes.iter().rev().enumerate() {
+                                                                if !(48..58).contains(dig) {
+                                                                    break 'm Modifiers::NONE;
+                                                                }
+                                                                num += (dig-48)*10_u8.pow(i as u32)
+                                                            }
+                                                            Modifiers::new(num-1)
+                                                        } else {
+                                                            Modifiers::NONE
+                                                        }
+                                                    },
+                                                    _ => Modifiers::NONE,
+                                                }};
                                                 KeyEvent {
                                                     key_code: code.into(),
+                                                    mods,
                                                     ..Default::default()
                                                 }
                                             } else {
@@ -176,7 +189,15 @@ impl InputParser {
                                     } else {
                                         break;
                                     }
-                                }
+                                },
+                                0x20..=0x7E => {
+                                    iter.next();
+                                    KeyEvent {
+                                        key_code: next.into(),
+                                        mods: Modifiers::ALT,
+                                        ..Default::default()
+                                    }
+                                },
                                 _ => {
                                     KeyEvent {
                                         key_code: 0x1B_u8.into(),
@@ -280,7 +301,7 @@ impl CSIList {
         self.data.iter().find(|x|x.1 == codepoint).map(|x|&x.0)
     }
 
-    fn match_csi(&self, csi: CSICommand) -> Option<u32> {
+    fn match_csi(&self, csi: &CSICommand) -> Option<u32> {
         self.data.iter().find(|item| {
             match csi.get_final() {
                 b'A'..=b'Z' => {
@@ -538,10 +559,11 @@ enum EventType {
 //meta      0b100000    (32)
 //caps_lock 0b1000000   (64)
 //num_lock  0b10000000  (128)
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Default)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Default)]
 struct Modifiers (u8);
 
 impl Modifiers {
+    pub const NONE: Self = Self(0);
     pub const SHIFT: Self = Self(1);
     pub const ALT: Self = Self(2);
     pub const CTRL: Self = Self(4);
@@ -550,6 +572,10 @@ impl Modifiers {
     pub const META: Self = Self(32);
     pub const CAPS_LOCK: Self = Self(64);
     pub const NUM_LOCK: Self = Self(128);
+
+    pub fn new(mods: u8) -> Self {
+        Self(mods)
+    }
 
     #[inline]
     pub fn shift_pressed(&self) -> bool {
@@ -563,6 +589,27 @@ impl Modifiers {
     pub fn ctrl_pressed(&self) -> bool {
         check_bit_at(self.0, 2)
     }
+    #[inline]
+    pub fn super_pressed(&self) -> bool {
+        check_bit_at(self.0, 3)
+    }
+    #[inline]
+    pub fn hyper_pressed(&self) -> bool {
+        check_bit_at(self.0, 4)
+    }
+    #[inline]
+    pub fn meta_pressed(&self) -> bool {
+        check_bit_at(self.0, 5)
+    }
+    #[inline]
+    pub fn caps_lock_pressed(&self) -> bool {
+        check_bit_at(self.0, 6)
+    }
+    #[inline]
+    pub fn num_lock_pressed(&self) -> bool {
+        check_bit_at(self.0, 7)
+    }
+
 
     #[inline]
     pub fn superset_of(&self, other: Self) -> bool {
@@ -574,7 +621,37 @@ impl Modifiers {
     }
 }
 
-#[inline]
+impl std::fmt::Debug for Modifiers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut dbs = f.debug_list();
+        if self.shift_pressed() {
+            dbs.entry(&"Shift");
+        }
+        if self.ctrl_pressed() {
+            dbs.entry(&"Ctrl");
+        }
+        if self.alt_pressed() {
+            dbs.entry(&"Alt");
+        }
+        if self.super_pressed() {
+            dbs.entry(&"Super");
+        }
+        if self.hyper_pressed() {
+            dbs.entry(&"Hyper");
+        }
+        if self.meta_pressed() {
+            dbs.entry(&"Meta");
+        }
+        if self.caps_lock_pressed() {
+            dbs.entry(&"CapsLock");
+        }
+        if self.num_lock_pressed() {
+            dbs.entry(&"NumLock");
+        }
+        dbs.finish()
+    }
+}
+
 fn check_bit_at(byte: u8, n: u8) -> bool {
     byte << (7-n) >> 7 == 1
 }
@@ -738,7 +815,7 @@ mod tests {
         };
         let mut list = CSIList::new();
         list.push(CSICommand::parse(b"2~").unwrap().0, 57349);
-        assert_eq!(list.match_csi(csi), Some(57349));
+        assert_eq!(list.match_csi(&csi), Some(57349));
     }
 
 }
