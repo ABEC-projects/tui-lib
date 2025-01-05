@@ -150,10 +150,9 @@ impl InputParser {
                             let next = *next;
                             match next {
                                 b'[' | b'O' => {
-                                    iter.next();
                                     if let Some(slice) = input.get((i+1)..) {
                                         if let Some((command, len)) = CSICommand::parse(slice) {
-                                            iter.nth(len-1);
+                                            iter.nth(len);
                                             if let Some(code) = self.mappings.match_csi(&command) {
                                                 let mods = 'm: {match command.get_final() {
                                                     b'A'..=b'Z' | b'~' => {
@@ -183,8 +182,23 @@ impl InputParser {
                                             } else {
                                                 continue;
                                             }
+                                        } else if next == b'[' {
+                                            iter.next();
+                                            KeyEvent {
+                                                key_code: b'['.into(),
+                                                mods: Modifiers::ALT,
+                                                ..Default::default()
+                                            }
                                         } else {
+                                            iter.next();
                                             continue;
+                                        }
+                                    } else if next == b'[' {
+                                        iter.next();
+                                        KeyEvent {
+                                            key_code: b'['.into(),
+                                            mods: Modifiers::ALT,
+                                            ..Default::default()
                                         }
                                     } else {
                                         break;
