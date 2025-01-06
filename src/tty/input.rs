@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
+pub mod constants;
+
 use terminfo::Database;
+use constants as c;
 
 macro_rules! call_multiple {
     ($f:ident, [$($arg:expr),+$(,)?]) => {
@@ -22,7 +25,7 @@ macro_rules! call_multiple {
 }
 
 macro_rules! push_from_db {
-    ($db:ident, $to:expr, [$(($cap:path, $val:literal)),+$(,)?]) => {
+    ($db:ident, $to:expr, [$(($cap:path, $val:expr)),+$(,)?]) => {
         $(match $db.get::<$cap>() {
             Some(v) => {
                 if let Some(slice) = &v.as_ref().get(2..) {
@@ -62,79 +65,79 @@ impl InputParser {
     }
 
     pub fn push_from_terminfo(&mut self, db: &Database) {
+        use c::*;
         use terminfo::capability as cap;
-        call_multiple!(|val: (&[u8], u32)| {
-            if let Some(command) = CSICommand::parse(val.0)
-            { self.mappings.push(command.0, val.1) }
-        }, [
-            (b"\x1B27u", 57344),
-            (b"\x1B13u", 57345),
-            (b"\x1B9u", 57346),
-        ]);
+        // call_multiple!(|val: (&[u8], u32)| {
+        //     if let Some(command) = CSICommand::parse(val.0)
+        //     { self.mappings.push(command.0, val.1) }
+        // }, [
+        //     (b"\x1B27u", c::ESCAPE),
+        //     (b"\x1B13u", c::ENTER),
+        //     (b"\x1B9u", c::TAB),
+        // ]);
         push_from_db!(db, self.mappings, [
-            (cap::Tab, 57347),
-            (cap::KeyBackspace, 57348),
-            (cap::KeyIc, 57349),
-            (cap::KeyDc, 57350),
-            (cap::KeyLeft, 57351),
-            (cap::KeyRight, 57352),
-            (cap::KeyUp, 57353),
-            (cap::KeyDown, 57354),
-            (cap::KeyPPage, 57355), // PageUp
-            (cap::KeyNPage, 57356), // PageDown
-            (cap::KeyHome, 57357),
-            (cap::CursorHome, 57357),
-            (cap::KeyEnd, 57358),
+            (cap::Tab, TAB),
+            (cap::KeyBackspace, BACKSPACE),
+            (cap::KeyIc, INSERT),
+            (cap::KeyDc, DELETE),
+            (cap::KeyLeft, LEFT),
+            (cap::KeyRight, RIGHT),
+            (cap::KeyUp, UP),
+            (cap::KeyDown, DOWN),
+            (cap::KeyPPage, PAGE_UP), // PageUp
+            (cap::KeyNPage, PAGE_DOWN), // PageDown
+            (cap::KeyHome, HOME),
+            (cap::CursorHome, HOME),
+            (cap::KeyEnd, END),
         ]);
-        call_multiple!(|val: (&[u8], u32)| {
-            if let Some(command) = CSICommand::parse(val.0)
-            { self.mappings.push(command.0, val.1) }
-        }, [
-            (b"\x1B57358u", 57358),
-            (b"\x1B57359u", 57359),
-            (b"\x1B57360u", 57360),
-            (b"\x1B57361u", 57361),
-            (b"\x1B57362u", 57362),
-            (b"\x1B57363u", 57363),
-        ]);
+        // call_multiple!(|val: (&[u8], u32)| {
+        //     if let Some(command) = CSICommand::parse(val.0)
+        //     { self.mappings.push(command.0, val.1) }
+        // }, [
+        //     (b"\x1B57358u", 57358),
+        //     (b"\x1B57359u", 57359),
+        //     (b"\x1B57360u", 57360),
+        //     (b"\x1B57361u", 57361),
+        //     (b"\x1B57362u", 57362),
+        //     (b"\x1B57363u", 57363),
+        // ]);
         push_from_db!(db, self.mappings, [
-            (cap::KeyF1, 57364),
-            (cap::KeyF2, 57365),
-            (cap::KeyF3, 57366),
-            (cap::KeyF4, 57367),
-            (cap::KeyF5, 57368),
-            (cap::KeyF6, 57369),
-            (cap::KeyF7, 57370),
-            (cap::KeyF8, 57371),
-            (cap::KeyF9, 57372),
-            (cap::KeyF10, 57373),
-            (cap::KeyF11, 57374),
-            (cap::KeyF12, 57375),
-            (cap::KeyF13, 57376),
-            (cap::KeyF14, 57377),
-            (cap::KeyF15, 57378),
-            (cap::KeyF16, 57379),
-            (cap::KeyF17, 57380),
-            (cap::KeyF18, 57381),
-            (cap::KeyF19, 57382),
-            (cap::KeyF20, 57383),
-            (cap::KeyF21, 57384),
-            (cap::KeyF22, 57385),
-            (cap::KeyF23, 57386),
-            (cap::KeyF24, 57387),
-            (cap::KeyF25, 57388),
-            (cap::KeyF26, 57389),
-            (cap::KeyF27, 57390),
-            (cap::KeyF28, 57391),
-            (cap::KeyF29, 57392),
-            (cap::KeyF30, 57393),
-            (cap::KeyF31, 57394),
-            (cap::KeyF32, 57395),
-            (cap::KeyF33, 57396),
-            (cap::KeyF34, 57397),
-            (cap::KeyF35, 57398),
+            (cap::KeyF1, F1),
+            (cap::KeyF2, F2),
+            (cap::KeyF3, F3),
+            (cap::KeyF4, F4),
+            (cap::KeyF5, F5),
+            (cap::KeyF6, F6),
+            (cap::KeyF7, F7),
+            (cap::KeyF8, F8),
+            (cap::KeyF9, F9),
+            (cap::KeyF10, F10),
+            (cap::KeyF11, F11),
+            (cap::KeyF12, F12),
+            (cap::KeyF13, F13),
+            (cap::KeyF14, F14),
+            (cap::KeyF15, F15),
+            (cap::KeyF16, F16),
+            (cap::KeyF17, F17),
+            (cap::KeyF18, F18),
+            (cap::KeyF19, F19),
+            (cap::KeyF20, F20),
+            (cap::KeyF21, F21),
+            (cap::KeyF22, F22),
+            (cap::KeyF23, F23),
+            (cap::KeyF24, F24),
+            (cap::KeyF25, F25),
+            (cap::KeyF26, F26),
+            (cap::KeyF27, F27),
+            (cap::KeyF28, F28),
+            (cap::KeyF29, F29),
+            (cap::KeyF30, F30),
+            (cap::KeyF31, F31),
+            (cap::KeyF32, F32),
+            (cap::KeyF33, F33),
+            (cap::KeyF34, F34),
+            (cap::KeyF35, F35),
         ]);
-
     }
 
     pub fn parse(&self, input: &[u8]) -> Vec<KeyEvent> {
@@ -209,7 +212,8 @@ impl InputParser {
                         false
                     }else {
                         let next = next.unwrap();
-                        (0x0..=0x40).contains(next) || (0x5B..=0x7E).contains(next)                     }
+                        (0x0..=0x40).contains(next) || (0x5B..=0x7E).contains(next)
+                    }
                 } => {
                     let next = *iter.next().unwrap().1;
                     KeyEvent {
