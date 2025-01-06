@@ -168,18 +168,25 @@ impl InputParser {
     pub fn parse(&self, input: &[u8]) -> Vec<KeyEvent> {
         let mut events = Vec::new();
         let mut iter = input.iter().enumerate();
-        while let Some((i, byte)) = iter.next() {
+        'outer: while let Some((i, byte)) = iter.next() {
             let byte = *byte;
             events.push(match byte {
                 0x1B if {
                     let next = input.get(i+1);
                     next == Some(&b'[') || next == Some(&b'O')
-                } => {
+                } => 'ev: {
                     let i = i + 1;
                     let next = *input.get(i).unwrap();
                     if let Some(slice) = input.get((i+1)..) {
                         if let Some((command, len)) = CSICommand::parse(slice) {
                             iter.nth(len);
+                            if command.final_byte == b'Z' {
+                                break 'ev KeyEvent {
+                                    key_code: c::TAB.into(),
+                                    mods: Modifiers::SHIFT,
+                                    ..Default::default()
+                                }
+                            }
                             if let Some(code) = self.mappings.match_csi(&command) {
                                 let mods = 'm: {match command.get_final() {
                                     b'A'..=b'Z' | b'~' => {
@@ -207,7 +214,7 @@ impl InputParser {
                                     ..Default::default()
                                 }
                             } else {
-                                continue;
+                                continue 'outer;
                             }
                         } else if next == b'[' {
                             iter.next();
@@ -218,7 +225,7 @@ impl InputParser {
                             }
                         } else {
                             iter.next();
-                            continue;
+                            continue 'outer;
                         }
                     } else if next == b'[' {
                         iter.next();
@@ -228,7 +235,7 @@ impl InputParser {
                             ..Default::default()
                         }
                     } else {
-                        break;
+                        break 'outer;
                     }
                 },
                 0x1B if {
