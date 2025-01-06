@@ -165,7 +165,7 @@ impl InputParser {
         ]);
     }
 
-    pub fn parse(&self, input: &[u8]) -> Vec<KeyEvent> {
+    pub fn parse(&self, input: &[u8]) -> KeyEventList {
         let mut events = Vec::new();
         let mut iter = input.iter().enumerate();
         'outer: while let Some((i, byte)) = iter.next() {
@@ -320,7 +320,27 @@ impl InputParser {
                 0xC0..=0xC1 | 0xF5..=0xFF => {continue;},
             });
         }
-        events
+        KeyEventList {
+            list: events
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct KeyEventList {
+    list: Vec<KeyEvent>
+}
+
+impl std::ops::Deref for KeyEventList {
+    type Target = [KeyEvent];
+    fn deref(&self) -> &Self::Target {
+        &self.list
+    }
+}
+
+impl std::ops::DerefMut for KeyEventList {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.list
     }
 }
 
@@ -450,7 +470,7 @@ impl CSICommand {
 }
 
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct KeyEvent {
     key_code: KeyCode,
     mods: Modifiers,
@@ -460,7 +480,7 @@ pub struct KeyEvent {
 /// Used to represent any key as either 
 /// standart unicode codepoint or codepoint from 
 /// Unicode Private Use Area for most functional keys
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 struct KeyCode (u32);
 
 impl From<u32> for KeyCode {
@@ -587,7 +607,7 @@ enum FunctionalKey {
     IsoLevel5Shift,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 enum EventType {
     Press,
     #[default]
