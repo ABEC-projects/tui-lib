@@ -470,7 +470,7 @@ impl CSICommand {
 }
 
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct KeyEvent {
     key_code: KeyCode,
     mods: Modifiers,
@@ -480,7 +480,7 @@ pub struct KeyEvent {
 /// Used to represent any key as either 
 /// standart unicode codepoint or codepoint from 
 /// Unicode Private Use Area for most functional keys
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 struct KeyCode (u32);
 
 impl From<u32> for KeyCode {
@@ -607,7 +607,7 @@ enum FunctionalKey {
     IsoLevel5Shift,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy)]
 enum EventType {
     Press,
     #[default]
