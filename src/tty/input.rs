@@ -67,14 +67,6 @@ impl InputParser {
     pub fn push_from_terminfo(&mut self, db: &Database) {
         use c::*;
         use terminfo::capability as cap;
-        // call_multiple!(|val: (&[u8], u32)| {
-        //     if let Some(command) = CSICommand::parse(val.0)
-        //     { self.mappings.push(command.0, val.1) }
-        // }, [
-        //     (b"\x1B27u", c::ESCAPE),
-        //     (b"\x1B13u", c::ENTER),
-        //     (b"\x1B9u", c::TAB),
-        // ]);
         push_from_db!(db, self.mappings, [
             (cap::Tab, TAB),
             (cap::KeyBackspace, BACKSPACE),
@@ -90,17 +82,6 @@ impl InputParser {
             (cap::CursorHome, HOME),
             (cap::KeyEnd, END),
         ]);
-        // call_multiple!(|val: (&[u8], u32)| {
-        //     if let Some(command) = CSICommand::parse(val.0)
-        //     { self.mappings.push(command.0, val.1) }
-        // }, [
-        //     (b"\x1B57358u", 57358),
-        //     (b"\x1B57359u", 57359),
-        //     (b"\x1B57360u", 57360),
-        //     (b"\x1B57361u", 57361),
-        //     (b"\x1B57362u", 57362),
-        //     (b"\x1B57363u", 57363),
-        // ]);
         push_from_db!(db, self.mappings, [
             (cap::KeyF1, F1),
             (cap::KeyF2, F2),
@@ -137,6 +118,50 @@ impl InputParser {
             (cap::KeyF33, F33),
             (cap::KeyF34, F34),
             (cap::KeyF35, F35),
+        ]);
+    }
+
+    pub fn push_default(&mut self) {
+        use c::*;
+
+        let mut f = |val: (&[u8], u32)| {
+            if let Some(command) = CSICommand::parse(val.0)
+            { self.mappings.push(command.0, val.1) }
+        };
+
+        call_multiple!(f, [
+            (b"\x1B[2~", INSERT),
+            (b"\x1B[3~", DELETE),
+            (b"\x1B[5~", PAGE_UP),
+            (b"\x1B[6~", PAGE_DOWN),
+            (b"\x1B[A", UP),
+            (b"\x1b[B", DOWN),
+            (b"\x1B[C", RIGHT),
+            (b"\x1B[D", LEFT),
+            (b"\x1B[H", HOME),
+            (b"\x1B[F", END),
+            (b"\x1BOA", UP),
+            (b"\x1bOB", DOWN),
+            (b"\x1BOC", RIGHT),
+            (b"\x1BOD", LEFT),
+            (b"\x1BOH", HOME),
+            (b"\x1BOF", END),
+            (b"\x1BOR", F1),
+            (b"\x1BOQ", F2),
+            (b"\x1BOR", F3),
+            (b"\x1BOS", F4),
+            (b"\x1B[12~", F2),
+            (b"\x1B[13~", F3),
+            (b"\x1B[14~", F4),
+            (b"\x1B[15~", F5),
+            (b"\x1B[17~", F6),
+            (b"\x1B[18~", F7),
+            (b"\x1B[19~", F8),
+            (b"\x1B[20~", F9),
+            (b"\x1B[21~", F10),
+            (b"\x1B[23~", F11),
+            (b"\x1B[24~", F12),
+            (b"\x1B[29~", MENU),
         ]);
     }
 
