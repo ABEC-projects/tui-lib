@@ -61,4 +61,3 @@ impl Selector {
         &self.items[self.cursor_pos]
     }
 }
-

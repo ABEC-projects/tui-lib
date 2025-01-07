@@ -331,6 +331,37 @@ pub struct KeyEventList {
     list: Vec<KeyEvent>
 }
 
+impl KeyEventList {
+    pub fn c0_to_ctrl(&mut self) {
+        for ev in self.list.iter_mut() {
+            match ev.key_code.0 {
+                0 => {
+                    ev.key_code = b' '.into();
+                    ev.mods |= Modifiers::CTRL;
+                },
+                0x1..=0x1A => {
+                    ev.key_code = (ev.key_code.0 as u8 - 1 + b'a').into();
+                    ev.mods |= Modifiers::CTRL;
+                },
+                0x1C..=0x1F => {
+                    ev.key_code = (ev.key_code.0 as u8 - 28 + b'4').into();
+                    ev.mods |= Modifiers::CTRL;
+                },
+                _ => {},
+            }
+        };
+    }
+
+    pub fn uppercase_to_shift(&mut self) {
+        for ev in self.list.iter_mut() {
+            if let 0x41..=0x5A = ev.key_code.0 {
+                ev.key_code.0 += (b'a' - b'A') as u32;
+                ev.mods |= Modifiers::SHIFT;
+            }  
+        }
+    }
+}
+
 impl std::ops::Deref for KeyEventList {
     type Target = [KeyEvent];
     fn deref(&self) -> &Self::Target {

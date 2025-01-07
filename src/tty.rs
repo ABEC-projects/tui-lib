@@ -1,5 +1,4 @@
 pub mod input;
-pub mod constants;
 
 use std::error::Error;
 use std::os::fd::AsRawFd;
@@ -44,7 +43,6 @@ impl Tty {
     pub fn uncook (&mut self) -> Result<()> {
         let ttyfd = self.raw.as_fd();
         let mut termios = self.orig_termios.clone();
-        println!("{:?}", self.orig_termios);
         // According to https://www.man7.org/linux/man-pages/man3/termios.3.html `Raw mode` section
         {
             termios.input_flags &= !(
@@ -77,6 +75,7 @@ impl Tty {
             termios.control_chars[VMIN] = 1;
         }
         tcsetattr(ttyfd, SetArg::TCSAFLUSH, &termios).unwrap();
+        // todo! change to use terminfo
         self.raw.write_all(b"\x1B[?5l").unwrap();
         self.raw.write_all(b"\x1B[s").unwrap();
         self.raw.write_all(b"\x1B[?47h").unwrap();

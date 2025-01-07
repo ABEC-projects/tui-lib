@@ -1,28 +1,17 @@
-use std::io::Write;
-
-use nixtui::{tty::Tty, ui::anchors::{Anchor, TuiAnchors}};
+use std::io::Read;
 
 fn main() {
-    let mut tty = Tty::new().unwrap();
-    let mut ui = TuiAnchors::new(tty.size().unwrap().into());
-    let upper_left = ui.add_anchor(Anchor::new_abs_from_upper_left(15, 15));
-    let down_right = ui.add_anchor(Anchor::new_rel_from_down_right(0.5, 0.5));
-    let rect = ui.add_rect(&upper_left, &down_right);
-    let anchor_ = Anchor::new_rel_from_down_right(0.5, 0.5);
-    let anchor = ui.add_anchor_in(anchor_, &rect);
-
-    loop {
-        ui.update_size(tty.size().unwrap().into());
-        tty.clean().unwrap();
-        let cords = ui.get_cords_of_anchor(&anchor);
-        tty.move_cursor(cords.row, cords.col).unwrap();
-        tty.write_all(b"@").unwrap();
-        let cords = ui.get_cords_of_anchor(&down_right);
-        tty.move_cursor(cords.row, cords.col).unwrap();
-        tty.write_all(b"*").unwrap();
-        let cords = ui.get_cords_of_anchor(&upper_left);
-        tty.move_cursor(cords.row, cords.col).unwrap();
-        tty.write_all(b"*").unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
+   use nixtui::tty::input::InputParser;
+   let mut parser = InputParser::from_env().unwrap();
+   parser.push_default();
+   let mut tty = std::fs::File::open("/dev/tty").unwrap();
+   let mut buf = [0_u8;100];
+   loop {
+       let read = tty.read(&mut buf).unwrap();
+       let slice = &buf[0..read];
+       let parsed = parser.parse(slice);
+       println!("{:?}", slice);
+       println!("{parsed:#?}");
+   }
 }
+
