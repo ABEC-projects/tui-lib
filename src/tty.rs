@@ -159,6 +159,12 @@ impl Write for Tty  {
     }
 }
 
+impl std::io::Read for Tty {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.raw.read(buf)
+    }
+}
+
 
 #[derive(Debug)]
 pub struct  TtyError {
