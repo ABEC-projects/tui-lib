@@ -1,5 +1,3 @@
-pub mod input;
-
 use std::error::Error;
 use std::os::fd::AsRawFd;
 use std::{fs::File, os::fd::AsFd};

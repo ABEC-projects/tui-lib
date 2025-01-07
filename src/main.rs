@@ -1,7 +1,7 @@
 use std::io::Read;
 
 fn main() {
-   use nixtui::tty::input::InputParser;
+   use nixtui::input::InputParser;
    let mut parser = InputParser::from_env().unwrap();
    parser.push_default();
    let mut tty = std::fs::File::open("/dev/tty").unwrap();
