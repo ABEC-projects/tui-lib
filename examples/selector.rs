@@ -23,7 +23,7 @@ impl Selector {
     }
 
     fn run(&mut self) -> &str {
-        self.tty.uncook().unwrap();
+        self.tty.raw_mode().unwrap();
         let mut termios = self.tty.get_termios().unwrap().clone();
         termios.control_chars[VTIME] = 1;
         termios.control_chars[VMIN] = 0;
