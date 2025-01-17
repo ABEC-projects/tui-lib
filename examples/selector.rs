@@ -28,7 +28,7 @@ impl Selector {
         termios.control_chars[VTIME] = 1;
         termios.control_chars[VMIN] = 0;
         self.tty.write_termios(termios, SetArg::TCSAFLUSH).unwrap();
-        self.tty.hide_cursor().unwrap();
+        self.tty.cursor_invisible().unwrap();
 
         'loop_: loop {
             for (i, s) in self.items.iter().enumerate() {

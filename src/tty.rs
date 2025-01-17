@@ -1,11 +1,3 @@
-mod changes;
-
-use std::error::Error;
-use std::io::{Read, Write};
-use std::os::fd::AsRawFd;
-use std::{fs::File, os::fd::AsFd};
-
-use changes::{FromTerminfo, TtyChange};
 use nix::libc::ioctl;
 use nix::sys::termios::Termios;
 use nix::{
@@ -14,13 +6,43 @@ use nix::{
         tcgetattr, tcsetattr, ControlFlags, InputFlags, LocalFlags, OutputFlags, SetArg,
     },
 };
+use std::io::{Read, Write};
+use std::{
+    fs::File,
+    os::fd::{AsFd, AsRawFd},
+};
+use terminfo::capability as cap;
+use thiserror::Error;
+
+macro_rules! tty_expand_cap {
+    ($db:expr, $write:expr, $path:path, $name:literal) => {
+        {
+            let Some(cap) = $db.get::<$path>() else {
+                return Err(TtyError::TerminfoEntryNotFound { name: $name });
+            };
+            if let Err(err) = cap.expand().to($write) {
+                return Err(terminfo_to_tty_error(err, $name));
+            };
+            Ok(())
+        }
+    };
+    ($db:expr, $write:expr, $path:path, $name:literal; $first_param:expr $(,$params:expr)*$(,)?) => {
+        {
+            let Some(cap) = $db.get::<$path>() else {
+                return Err(TtyError::TerminfoEntryNotFound { name: $name });
+            };
+            ::terminfo::expand!($write, cap.as_ref(); $first_param $(,$params)+ ).map_err(|e| {
+                terminfo_to_tty_error(e, $name)
+            })
+        }
+    }
+}
 
 pub type Result<T> = std::result::Result<T, TtyError>;
 
 pub struct Tty {
     raw: File,
     orig_termios: Termios,
-    changes: Vec<Box<dyn TtyChange>>,
     db: terminfo::Database,
 }
 
@@ -29,7 +51,6 @@ impl std::fmt::Debug for Tty {
         let Tty {
             raw,
             orig_termios,
-            changes: _,
             db,
         } = self;
         f.debug_struct("Tty")
@@ -47,26 +68,8 @@ impl Tty {
         Ok(Self {
             raw: file,
             orig_termios,
-            changes: Vec::new(),
             db: terminfo::Database::from_env()?,
         })
-    }
-
-    pub fn apply_change_from_terminfo<C: TtyChange + FromTerminfo + 'static>(
-        &mut self,
-    ) -> Result<Option<()>> {
-        let change = match C::from_terminfo(&self.db) {
-            Some(v) => v,
-            None => return Ok(None),
-        };
-        self.apply_change(change)?;
-        Ok(Some(()))
-    }
-
-    pub fn apply_change<C: TtyChange + 'static>(&mut self, change: C) -> Result<()> {
-        change.apply(&mut self.raw)?;
-        self.changes.push(Box::new(change));
-        Ok(())
     }
 
     pub fn get_termios(&mut self) -> Result<Termios> {
@@ -109,17 +112,6 @@ impl Tty {
         Ok(())
     }
 
-    /// Saves the current cursor position and restores it when
-    /// Tty is being dropped
-    pub fn c_save_cursor(&mut self) -> Result<Option<()>> {
-        self.apply_change_from_terminfo::<changes::SaveCursor>()
-    }
-
-    /// Enters the ca mode and exites it when Tty is being dropped
-    pub fn c_enter_ca_mode(&mut self) -> Result<Option<()>> {
-        self.apply_change_from_terminfo::<changes::EnterCaMode>()
-    }
-
     /// Restores the original termios settings
     pub fn write_orig_termios(&mut self) -> Result<()> {
         Ok(tcsetattr(
@@ -129,14 +121,6 @@ impl Tty {
         )?)
     }
 
-    pub fn revert_changes(&mut self) -> Result<()> {
-        self.write_orig_termios()?;
-        for c in self.changes.iter() {
-            c.revert(&mut self.raw)?;
-        }
-        Ok(())
-    }
-
     pub fn read_u8(&mut self) -> Result<u8> {
         let mut buf = [0; 1];
         self.read_exact(&mut buf)?;
@@ -144,26 +128,86 @@ impl Tty {
     }
 
     pub fn move_cursor(&mut self, row: usize, col: usize) -> Result<()> {
-        let buf = format!("\x1B[{};{}H", row + 1, col + 1);
-        self.write_all(buf.as_bytes())?;
-        Ok(())
+        tty_expand_cap!(&self.db, &self.raw, cap::CursorAddress, "CursorAddress"; row as i32, col as i32)
     }
 
-    pub fn hide_cursor(&mut self) -> Result<()> {
-        self.write_all(b"\x1B[?25l")?;
-        Ok(())
+    pub fn cursor_invisible(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &self.raw, cap::CursorInvisible, "CursorInvisible")
     }
 
-    pub fn show_cursor(&mut self) -> Result<()> {
-        self.write_all(b"\x1B[?25h")?;
-        Ok(())
+    pub fn cursor_very_visible(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &self.raw, cap::CursorVisible, "CursorVisible")
+    }
+
+    pub fn cursor_normal_visibility(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &self.raw, cap::CursorNormal, "CursorNormal")
     }
 
     pub fn clean(&mut self) -> Result<()> {
-        self.write_all(b"\x1B[2J")?;
-        Ok(())
+        tty_expand_cap!(self.db, &self.raw, cap::ClearScreen, "ClearScreen")
     }
 
+    pub fn bell(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &self.raw, cap::Bell, "Bell")
+    }
+
+    /// Turns on underline mode
+    pub fn underline(&mut self) -> Result<()> {
+        tty_expand_cap!(
+            self.db,
+            &self.raw,
+            cap::EnterUnderlineMode,
+            "EnterUnderlineMode"
+        )
+    }
+
+    // Exits underline mode
+    pub fn exit_underline(&mut self) -> Result<()> {
+        tty_expand_cap!(
+            self.db,
+            &self.raw,
+            cap::ExitUnderlineMode,
+            "ExitEnderlineMode"
+        )
+    }
+
+    /// Turns on italics mode
+    pub fn italics(&mut self) -> Result<()> {
+        tty_expand_cap!(
+            self.db,
+            &self.raw,
+            cap::EnterItalicsMode,
+            "EnterItalicsMode"
+        )
+    }
+
+    /// Exits italics mode
+    pub fn exit_italics(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &self.raw, cap::ExitItalicsMode, "ExitItalicsMode")
+    }
+
+    /// Turns on bold mode
+    pub fn bold(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &self.raw, cap::EnterBoldMode, "EnterBoldMode")
+    }
+
+    /// Exits all atribute modes, e. g. `self.bold()`
+    pub fn exit_attribute_modes(&mut self) -> Result<()> {
+        tty_expand_cap!(
+            self.db,
+            &self.raw,
+            cap::ExitAttributeMode,
+            "ExitAttributeMode"
+        )
+    }
+
+    pub fn enter_secure_mode(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &self.raw, cap::EnterSecureMode, "EnterSecureMode")
+    }
+
+    // pub fn exit_secure_mode(&mut self) -> Result<()> {
+    //     tty_expand_cap!(self.db, &self.raw, cap::ExitSec, "ExitSecureMode")
+    // }
     pub fn size(&mut self) -> Result<nix::libc::winsize> {
         let mut buf = nix::libc::winsize {
             ws_row: 0,
@@ -182,16 +226,11 @@ impl Tty {
         self.raw.write_all(buf.as_bytes())?;
         Ok(())
     }
-
-    pub fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
-        self.raw.read_exact(buf)?;
-        Ok(())
-    }
 }
 
 impl Drop for Tty {
     fn drop(&mut self) {
-        let _ = self.revert_changes();
+        let _ = self.write_orig_termios();
     }
 }
 
@@ -225,42 +264,24 @@ impl std::io::Read for Tty {
     }
 }
 
-#[derive(Debug)]
-pub struct TtyError {
-    pub kind: Kind,
-    pub value: Box<dyn Error + Send + Sync>,
-}
-
-#[derive(Debug)]
-pub enum Kind {
-    IOError,
-    TerminfoError,
-    Errno,
-}
-
-impl From<std::io::Error> for TtyError {
-    fn from(val: std::io::Error) -> Self {
-        TtyError {
-            kind: Kind::IOError,
-            value: Box::new(val),
-        }
+fn terminfo_to_tty_error(error: terminfo::Error, entry_name: &'static str) -> TtyError {
+    use terminfo::Error;
+    match error {
+        Error::NotFound => TtyError::TerminfoEntryNotFound { name: entry_name },
+        Error::Io(err) => TtyError::IOError(err),
+        _ => TtyError::TerminfoError(error),
     }
 }
 
-impl From<terminfo::Error> for TtyError {
-    fn from(value: terminfo::Error) -> Self {
-        TtyError {
-            kind: Kind::TerminfoError,
-            value: Box::new(value),
-        }
-    }
-}
-
-impl From<nix::errno::Errno> for TtyError {
-    fn from(value: nix::errno::Errno) -> Self {
-        TtyError {
-            kind: Kind::Errno,
-            value: Box::new(value),
-        }
-    }
+#[derive(Debug, Error)]
+pub enum TtyError {
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+    #[error("Error with terminfo database:\n\t`{0}`")]
+    TerminfoError(#[from] terminfo::Error),
+    #[error(transparent)]
+    Errno(#[from] nix::Error),
+    #[error("Capability `{name}` not found in terminfo database
+        This either means your terminal does not support this capability or the database is not complete")]
+    TerminfoEntryNotFound { name: &'static str },
 }
