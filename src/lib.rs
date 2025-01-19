@@ -1,3 +1,2 @@
-pub mod tty;
-pub mod ui;
 pub mod input;
+pub mod tty;

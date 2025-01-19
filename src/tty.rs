@@ -14,6 +14,8 @@ use std::{
 use terminfo::capability as cap;
 use thiserror::Error;
 
+use crate::input::InputParser;
+
 macro_rules! tty_expand_cap {
     ($db:expr, $write:expr, $path:path, $name:literal) => {
         {
@@ -40,7 +42,7 @@ macro_rules! tty_expand_cap {
 
 pub type Result<T> = std::result::Result<T, TtyError>;
 
-pub struct Tty<IO: Write + Read + AsFd + 'static> {
+pub struct Tty<IO: Write + Read + AsFd + 'static = File> {
     raw: IO,
     orig_termios: Termios,
     db: terminfo::Database,
@@ -203,6 +205,15 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
         tty_expand_cap!(self.db, &mut self.raw, cap::EnterBoldMode, "EnterBoldMode")
     }
 
+    pub fn reverse(&mut self) -> Result<()> {
+        tty_expand_cap!(
+            self.db,
+            &mut self.raw,
+            cap::EnterReverseMode,
+            "EnterReverseMode"
+        )
+    }
+
     /// Exits all atribute modes, e. g. `self.bold()`
     pub fn exit_attribute_modes(&mut self) -> Result<()> {
         tty_expand_cap!(
@@ -253,6 +264,10 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
         let buf = format!("\x1B[{}m", 40 + color);
         self.raw.write_all(buf.as_bytes())?;
         Ok(())
+    }
+
+    pub fn make_parser(&self) -> InputParser {
+        InputParser::from_terminfo(&self.db)
     }
 }
 

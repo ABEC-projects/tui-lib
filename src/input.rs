@@ -2,15 +2,15 @@
 
 pub mod constants;
 
-use terminfo::Database;
 use constants as c;
+use terminfo::Database;
 
 macro_rules! call_multiple {
     ($f:ident, [$($arg:expr),+$(,)?]) => {
-        $($f($arg);)+ 
+        $($f($arg);)+
     };
     ($f:expr, [$($arg:expr),+$(,)?]) => {
-        $(($f)($arg);)+ 
+        $(($f)($arg);)+
     };
     ($f:ident, $count:expr) => {
         for _ in 0..$count {
@@ -49,7 +49,6 @@ pub struct InputParser {
 }
 
 impl InputParser {
-
     pub fn new() -> Self {
         Self::default()
     }
@@ -67,104 +66,119 @@ impl InputParser {
     pub fn push_from_terminfo(&mut self, db: &Database) {
         use c::*;
         use terminfo::capability as cap;
-        push_from_db!(db, self.mappings, [
-            (cap::Tab, TAB),
-            (cap::KeyBackspace, BACKSPACE),
-            (cap::KeyIc, INSERT),
-            (cap::KeyDc, DELETE),
-            (cap::KeyLeft, LEFT),
-            (cap::KeyRight, RIGHT),
-            (cap::KeyUp, UP),
-            (cap::KeyDown, DOWN),
-            (cap::KeyPPage, PAGE_UP), // PageUp
-            (cap::KeyNPage, PAGE_DOWN), // PageDown
-            (cap::KeyHome, HOME),
-            (cap::CursorHome, HOME),
-            (cap::KeyEnd, END),
-        ]);
-        push_from_db!(db, self.mappings, [
-            (cap::KeyF1, F1),
-            (cap::KeyF2, F2),
-            (cap::KeyF3, F3),
-            (cap::KeyF4, F4),
-            (cap::KeyF5, F5),
-            (cap::KeyF6, F6),
-            (cap::KeyF7, F7),
-            (cap::KeyF8, F8),
-            (cap::KeyF9, F9),
-            (cap::KeyF10, F10),
-            (cap::KeyF11, F11),
-            (cap::KeyF12, F12),
-            (cap::KeyF13, F13),
-            (cap::KeyF14, F14),
-            (cap::KeyF15, F15),
-            (cap::KeyF16, F16),
-            (cap::KeyF17, F17),
-            (cap::KeyF18, F18),
-            (cap::KeyF19, F19),
-            (cap::KeyF20, F20),
-            (cap::KeyF21, F21),
-            (cap::KeyF22, F22),
-            (cap::KeyF23, F23),
-            (cap::KeyF24, F24),
-            (cap::KeyF25, F25),
-            (cap::KeyF26, F26),
-            (cap::KeyF27, F27),
-            (cap::KeyF28, F28),
-            (cap::KeyF29, F29),
-            (cap::KeyF30, F30),
-            (cap::KeyF31, F31),
-            (cap::KeyF32, F32),
-            (cap::KeyF33, F33),
-            (cap::KeyF34, F34),
-            (cap::KeyF35, F35),
-        ]);
+        push_from_db!(
+            db,
+            self.mappings,
+            [
+                (cap::Tab, TAB),
+                (cap::KeyBackspace, BACKSPACE),
+                (cap::KeyIc, INSERT),
+                (cap::KeyDc, DELETE),
+                (cap::KeyLeft, LEFT),
+                (cap::KeyRight, RIGHT),
+                (cap::KeyUp, UP),
+                (cap::KeyDown, DOWN),
+                (cap::KeyPPage, PAGE_UP),   // PageUp
+                (cap::KeyNPage, PAGE_DOWN), // PageDown
+                (cap::KeyHome, HOME),
+                (cap::CursorHome, HOME),
+                (cap::KeyEnd, END),
+            ]
+        );
+        push_from_db!(
+            db,
+            self.mappings,
+            [
+                (cap::KeyF1, F1),
+                (cap::KeyF2, F2),
+                (cap::KeyF3, F3),
+                (cap::KeyF4, F4),
+                (cap::KeyF5, F5),
+                (cap::KeyF6, F6),
+                (cap::KeyF7, F7),
+                (cap::KeyF8, F8),
+                (cap::KeyF9, F9),
+                (cap::KeyF10, F10),
+                (cap::KeyF11, F11),
+                (cap::KeyF12, F12),
+                (cap::KeyF13, F13),
+                (cap::KeyF14, F14),
+                (cap::KeyF15, F15),
+                (cap::KeyF16, F16),
+                (cap::KeyF17, F17),
+                (cap::KeyF18, F18),
+                (cap::KeyF19, F19),
+                (cap::KeyF20, F20),
+                (cap::KeyF21, F21),
+                (cap::KeyF22, F22),
+                (cap::KeyF23, F23),
+                (cap::KeyF24, F24),
+                (cap::KeyF25, F25),
+                (cap::KeyF26, F26),
+                (cap::KeyF27, F27),
+                (cap::KeyF28, F28),
+                (cap::KeyF29, F29),
+                (cap::KeyF30, F30),
+                (cap::KeyF31, F31),
+                (cap::KeyF32, F32),
+                (cap::KeyF33, F33),
+                (cap::KeyF34, F34),
+                (cap::KeyF35, F35),
+            ]
+        );
     }
 
     pub fn push_default(&mut self) {
         use c::*;
 
         let mut f = |val: (&[u8], u32)| {
-            if let Some(command) = CSICommand::parse(val.0)
-            { self.mappings.push(command.0, val.1) }
+            if let Some(command) = CSICommand::parse(val.0) {
+                self.mappings.push(command.0, val.1)
+            }
         };
 
-        call_multiple!(f, [
-            (b"\x1B[2~", INSERT),
-            (b"\x1B[3~", DELETE),
-            (b"\x1B[5~", PAGE_UP),
-            (b"\x1B[6~", PAGE_DOWN),
-            (b"\x1B[A", UP),
-            (b"\x1b[B", DOWN),
-            (b"\x1B[C", RIGHT),
-            (b"\x1B[D", LEFT),
-            (b"\x1B[H", HOME),
-            (b"\x1B[F", END),
-            (b"\x1BOA", UP),
-            (b"\x1bOB", DOWN),
-            (b"\x1BOC", RIGHT),
-            (b"\x1BOD", LEFT),
-            (b"\x1BOH", HOME),
-            (b"\x1BOF", END),
-            (b"\x1BOR", F1),
-            (b"\x1BOQ", F2),
-            (b"\x1BOR", F3),
-            (b"\x1BOS", F4),
-            (b"\x1B[12~", F2),
-            (b"\x1B[13~", F3),
-            (b"\x1B[14~", F4),
-            (b"\x1B[15~", F5),
-            (b"\x1B[17~", F6),
-            (b"\x1B[18~", F7),
-            (b"\x1B[19~", F8),
-            (b"\x1B[20~", F9),
-            (b"\x1B[21~", F10),
-            (b"\x1B[23~", F11),
-            (b"\x1B[24~", F12),
-            (b"\x1B[29~", MENU),
-        ]);
+        call_multiple!(
+            f,
+            [
+                (b"\x1B[2~", INSERT),
+                (b"\x1B[3~", DELETE),
+                (b"\x1B[5~", PAGE_UP),
+                (b"\x1B[6~", PAGE_DOWN),
+                (b"\x1B[A", UP),
+                (b"\x1b[B", DOWN),
+                (b"\x1B[C", RIGHT),
+                (b"\x1B[D", LEFT),
+                (b"\x1B[H", HOME),
+                (b"\x1B[F", END),
+                (b"\x1BOA", UP),
+                (b"\x1bOB", DOWN),
+                (b"\x1BOC", RIGHT),
+                (b"\x1BOD", LEFT),
+                (b"\x1BOH", HOME),
+                (b"\x1BOF", END),
+                (b"\x1BOR", F1),
+                (b"\x1BOQ", F2),
+                (b"\x1BOR", F3),
+                (b"\x1BOS", F4),
+                (b"\x1B[12~", F2),
+                (b"\x1B[13~", F3),
+                (b"\x1B[14~", F4),
+                (b"\x1B[15~", F5),
+                (b"\x1B[17~", F6),
+                (b"\x1B[18~", F7),
+                (b"\x1B[19~", F8),
+                (b"\x1B[20~", F9),
+                (b"\x1B[21~", F10),
+                (b"\x1B[23~", F11),
+                (b"\x1B[24~", F12),
+                (b"\x1B[29~", MENU),
+            ]
+        );
     }
 
+    /// Parsed all multybyte sequences in input, e. g. non-ascii UTF-8 characters,
+    /// control sequences, representing keys that do not have UTF-8 representation,
+    /// Alt-modified keys.
     pub fn parse(&self, input: &[u8]) -> KeyEventList {
         let mut events = Vec::new();
         let mut iter = input.iter().enumerate();
@@ -172,12 +186,13 @@ impl InputParser {
             let byte = *byte;
             events.push(match byte {
                 0x1B if {
-                    let next = input.get(i+1);
+                    let next = input.get(i + 1);
                     next == Some(&b'[') || next == Some(&b'O')
-                } => 'ev: {
+                } =>
+                'ev: {
                     let i = i + 1;
                     let next = *input.get(i).unwrap();
-                    if let Some(slice) = input.get((i+1)..) {
+                    if let Some(slice) = input.get((i + 1)..) {
                         if let Some((command, len)) = CSICommand::parse(slice) {
                             iter.nth(len);
                             if command.final_byte == b'Z' {
@@ -185,29 +200,33 @@ impl InputParser {
                                     key_code: c::TAB.into(),
                                     mods: Modifiers::SHIFT,
                                     ..Default::default()
-                                }
+                                };
                             }
                             if let Some(code) = self.mappings.match_csi(&command) {
-                                let mods = 'm: {match command.get_final() {
-                                    b'A'..=b'Z' | b'~' => {
-                                        if let Some(bytes) = command.get_parameter().split(|b|*b==b';').nth(1) {
-                                            let mut num = 0;
-                                            if bytes.len() > 3 {
-                                                break 'm Modifiers::NONE;
-                                            }
-                                            for (i, dig) in bytes.iter().rev().enumerate() {
-                                                if !(48..58).contains(dig) {
+                                let mods = 'm: {
+                                    match command.get_final() {
+                                        b'A'..=b'Z' | b'~' => {
+                                            if let Some(bytes) =
+                                                command.get_parameter().split(|b| *b == b';').nth(1)
+                                            {
+                                                let mut num = 0;
+                                                if bytes.len() > 3 {
                                                     break 'm Modifiers::NONE;
                                                 }
-                                                num += (dig-48)*10_u8.pow(i as u32)
+                                                for (i, dig) in bytes.iter().rev().enumerate() {
+                                                    if !(48..58).contains(dig) {
+                                                        break 'm Modifiers::NONE;
+                                                    }
+                                                    num += (dig - 48) * 10_u8.pow(i as u32)
+                                                }
+                                                Modifiers::new(num - 1)
+                                            } else {
+                                                Modifiers::NONE
                                             }
-                                            Modifiers::new(num-1)
-                                        } else {
-                                            Modifiers::NONE
                                         }
-                                    },
-                                    _ => Modifiers::NONE,
-                                }};
+                                        _ => Modifiers::NONE,
+                                    }
+                                };
                                 KeyEvent {
                                     key_code: code.into(),
                                     mods,
@@ -237,98 +256,108 @@ impl InputParser {
                     } else {
                         break 'outer;
                     }
-                },
+                }
                 0x1B if {
-                    let next = input.get(i+1);
+                    let next = input.get(i + 1);
                     if next.is_none() {
                         false
-                    }else {
+                    } else {
                         let next = next.unwrap();
                         (0x0..=0x40).contains(next) || (0x5B..=0x7E).contains(next)
                     }
-                } => {
+                } =>
+                {
                     let next = *iter.next().unwrap().1;
                     KeyEvent {
                         key_code: next.into(),
                         mods: Modifiers::ALT,
                         ..Default::default()
                     }
-                },
-                0x1B => KeyEvent{
+                }
+                0x1B => KeyEvent {
                     key_code: 0x1B_u8.into(),
                     ..Default::default()
                 },
                 // ASCII
-                0..0x1B | 0x1C..=0x7F => {
-                    KeyEvent {
-                        key_code: byte.into(),
-                        ..Default::default()
-                    }
+                0..0x1B | 0x1C..=0x7F => KeyEvent {
+                    key_code: byte.into(),
+                    ..Default::default()
                 },
                 // Continuation byte
-                0x80..=0xBF => {continue;},
+                0x80..=0xBF => {
+                    continue;
+                }
                 // First byte of 2-byte encoding
                 0xC2..=0xDF => {
                     let byte2 = (byte as u32 & !(0b111 << 5)) << 6;
-                    let byte1 = match iter.next().map(|x|x.1) {
+                    let byte1 = match iter.next().map(|x| x.1) {
                         Some(b) => *b,
                         None => continue,
-                    } as u32 & !(0b11 << 6);
+                    } as u32
+                        & !(0b11 << 6);
                     KeyEvent {
                         key_code: (byte2 | byte1).into(),
                         ..Default::default()
                     }
-                },
+                }
                 // First byte of 3-byte encoding
                 0xE0..=0xEF => {
                     let byte1 = (byte as u32 & !(0b1111 << 4)) << 12;
-                    let byte2 = (match iter.next().map(|x|x.1) {
+                    let byte2 = (match iter.next().map(|x| x.1) {
                         Some(b) => *b,
                         None => continue,
-                    } as u32 & !(0b11 << 6)) << 6; 
-                    let byte3 = (match iter.next().map(|x|x.1) {
+                    } as u32
+                        & !(0b11 << 6))
+                        << 6;
+                    let byte3 = (match iter.next().map(|x| x.1) {
                         Some(b) => *b,
                         None => continue,
-                    } as u32 & !(0b11 << 6)); 
+                    } as u32
+                        & !(0b11 << 6));
 
                     KeyEvent {
                         key_code: (byte3 | byte2 | byte1).into(),
                         ..Default::default()
                     }
-                },
+                }
                 // First byte of 4-byte encoding
                 0xF0..=0xF4 => {
                     let byte1 = (byte as u32 & !(0b11111 << 3)) << 20;
-                    let byte2 = (match iter.next().map(|x|x.1) {
+                    let byte2 = (match iter.next().map(|x| x.1) {
                         Some(b) => *b,
                         None => continue,
-                    } as u32 & !(0b11 << 6)) << 12; 
-                    let byte3 = (match iter.next().map(|x|x.1) {
+                    } as u32
+                        & !(0b11 << 6))
+                        << 12;
+                    let byte3 = (match iter.next().map(|x| x.1) {
                         Some(b) => *b,
                         None => continue,
-                    } as u32 & !(0b11 << 6)) << 6; 
-                    let byte4 = (match iter.next().map(|x|x.1) {
+                    } as u32
+                        & !(0b11 << 6))
+                        << 6;
+                    let byte4 = (match iter.next().map(|x| x.1) {
                         Some(b) => *b,
                         None => continue,
-                    } as u32 & !(0b11 << 6)); 
+                    } as u32
+                        & !(0b11 << 6));
                     KeyEvent {
                         key_code: KeyCode(byte1 | byte2 | byte3 | byte4),
                         ..Default::default()
                     }
                 }
                 // Unused in UTF-8
-                0xC0..=0xC1 | 0xF5..=0xFF => {continue;},
+                0xC0..=0xC1 | 0xF5..=0xFF => {
+                    continue;
+                }
             });
         }
-        KeyEventList {
-            list: events
-        }
+        KeyEventList { list: events }
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct KeyEventList {
-    list: Vec<KeyEvent>
+    list: Vec<KeyEvent>,
 }
 
 impl KeyEventList {
@@ -338,18 +367,18 @@ impl KeyEventList {
                 0 => {
                     ev.key_code = b' '.into();
                     ev.mods |= Modifiers::CTRL;
-                },
+                }
                 0x1..=0x1A => {
                     ev.key_code = (ev.key_code.0 as u8 - 1 + b'a').into();
                     ev.mods |= Modifiers::CTRL;
-                },
+                }
                 0x1C..=0x1F => {
                     ev.key_code = (ev.key_code.0 as u8 - 28 + b'4').into();
                     ev.mods |= Modifiers::CTRL;
-                },
-                _ => {},
+                }
+                _ => {}
             }
-        };
+        }
     }
 
     pub fn uppercase_to_shift(&mut self) {
@@ -357,7 +386,7 @@ impl KeyEventList {
             if let 0x41..=0x5A = ev.key_code.0 {
                 ev.key_code.0 += (b'a' - b'A') as u32;
                 ev.mods |= Modifiers::SHIFT;
-            }  
+            }
         }
     }
 }
@@ -377,53 +406,48 @@ impl std::ops::DerefMut for KeyEventList {
 
 #[derive(Default, Debug)]
 struct CSIList {
-    data: Vec<(CSICommand, u32)>
+    data: Vec<(CSICommand, u32)>,
 }
 
 impl CSIList {
-
     fn new() -> Self {
-        Self {
-            data: Vec::new()
-        }
+        Self { data: Vec::new() }
     }
-    
+
     fn push(&mut self, csi: CSICommand, codepoint: u32) {
         self.data.push((csi, codepoint));
     }
-    
+
     fn find_by_codepoint(&self, codepoint: u32) -> Option<&CSICommand> {
-        self.data.iter().find(|x|x.1 == codepoint).map(|x|&x.0)
+        self.data.iter().find(|x| x.1 == codepoint).map(|x| &x.0)
     }
 
     fn match_csi(&self, csi: &CSICommand) -> Option<u32> {
-        self.data.iter().find(|item| {
-            match csi.get_final() {
-                b'A'..=b'Z' => {
-                    csi.get_final() == item.0.get_final()
-                },
+        self.data
+            .iter()
+            .find(|item| match csi.get_final() {
+                b'A'..=b'Z' => csi.get_final() == item.0.get_final(),
                 b'~' => {
                     if item.0.get_final() == b'~' {
-                        match csi.get_parameter().split(|x|*x==b';').next() {
+                        match csi.get_parameter().split(|x| *x == b';').next() {
                             Some(x) => x == item.0.get_parameter(),
                             None => false,
                         }
-                    } else {false}
-                },
+                    } else {
+                        false
+                    }
+                }
                 _ => false,
-            }
-        }).map(|x|x.1)
+            })
+            .map(|x| x.1)
     }
-
 }
-
-
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 struct CSICommand {
     parameter_bytes: Vec<u8>,
     intermediate_bytes: Vec<u8>,
-    final_byte: u8
+    final_byte: u8,
 }
 
 impl CSICommand {
@@ -445,7 +469,7 @@ impl CSICommand {
                 Some(v) => v,
                 None => return None,
             }
-        }else {
+        } else {
             bytes
         };
 
@@ -455,7 +479,7 @@ impl CSICommand {
         let mut final_byte = 0;
 
         for byte in bytes {
-            if !interm  {
+            if !interm {
                 if (0x20..=0x2F).contains(byte) {
                     interm = true;
                     inter_end = param_end + 1;
@@ -466,12 +490,11 @@ impl CSICommand {
                     final_byte = *byte;
                     break;
                 }
-                if !(0x30..=0x3F).contains(byte){
+                if !(0x30..=0x3F).contains(byte) {
                     return None;
                 }
                 param_end += 1;
-            }
-            else {
+            } else {
                 if (0x40..=0x7E).contains(byte) {
                     final_byte = *byte;
                     break;
@@ -487,32 +510,28 @@ impl CSICommand {
             return None;
         }
         Some((
-                Self {
-                    parameter_bytes: bytes[0..param_end].to_vec(),
-                    intermediate_bytes: bytes[param_end..inter_end].to_vec(),
-                    final_byte,
-                },
-                inter_end + 1 + if skipped {2} else {0}
-        )
-        )
+            Self {
+                parameter_bytes: bytes[0..param_end].to_vec(),
+                intermediate_bytes: bytes[param_end..inter_end].to_vec(),
+                final_byte,
+            },
+            inter_end + 1 + if skipped { 2 } else { 0 },
+        ))
     }
-
-
 }
-
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct KeyEvent {
-    key_code: KeyCode,
-    mods: Modifiers,
-    event_type: EventType,
+    pub key_code: KeyCode,
+    pub mods: Modifiers,
+    pub event_type: EventType,
 }
 
-/// Used to represent any key as either 
-/// standart unicode codepoint or codepoint from 
+/// Used to represent any key as either
+/// standart unicode codepoint or codepoint from
 /// Unicode Private Use Area for most functional keys
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
-struct KeyCode (u32);
+pub struct KeyCode(pub u32);
 
 impl From<u32> for KeyCode {
     fn from(val: u32) -> Self {
@@ -533,7 +552,7 @@ enum FunctionalKey {
     Backspace,
     Insert,
     Delete,
-    Left, 
+    Left,
     Right,
     Up,
     Down,
@@ -639,11 +658,11 @@ enum FunctionalKey {
 }
 
 #[derive(Default, Debug, Clone, Copy)]
-enum EventType {
+pub enum EventType {
     Press,
     #[default]
     Repeat,
-    Release
+    Release,
 }
 
 //shift     0b1         (1)
@@ -655,7 +674,7 @@ enum EventType {
 //caps_lock 0b1000000   (64)
 //num_lock  0b10000000  (128)
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Default)]
-struct Modifiers (u8);
+pub struct Modifiers(u8);
 
 impl Modifiers {
     pub const NONE: Self = Self(0);
@@ -705,7 +724,6 @@ impl Modifiers {
         check_bit_at(self.0, 7)
     }
 
-
     #[inline]
     pub fn superset_of(&self, other: Self) -> bool {
         self.0 | other.0 == self.0
@@ -748,9 +766,8 @@ impl std::fmt::Debug for Modifiers {
 }
 
 fn check_bit_at(byte: u8, n: u8) -> bool {
-    byte << (7-n) >> 7 == 1
+    byte << (7 - n) >> 7 == 1
 }
-
 
 impl std::ops::BitAnd for Modifiers {
     type Output = Self;
@@ -805,7 +822,6 @@ impl std::ops::Not for Modifiers {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -822,15 +838,25 @@ mod tests {
         s
     }
 
-
     #[test]
-    fn test_check_bit () {
+    fn test_check_bit() {
         for i in 0..8_u8 {
             for j in 0..8_u8 {
                 let mut should_pass = true;
-                if j == i && i != 7 {should_pass = false;}
-                let this = 2_u8.pow(i as u32) + if i == 7 && j == 7 {0} else { 2_u8.pow(j as u32) };
-                assert_eq!(check_bit_at(this, i), should_pass, "This: {this}, i: {i}, j: {j}", );
+                if j == i && i != 7 {
+                    should_pass = false;
+                }
+                let this = 2_u8.pow(i as u32)
+                    + if i == 7 && j == 7 {
+                        0
+                    } else {
+                        2_u8.pow(j as u32)
+                    };
+                assert_eq!(
+                    check_bit_at(this, i),
+                    should_pass,
+                    "This: {this}, i: {i}, j: {j}",
+                );
             }
         }
     }
@@ -861,44 +887,59 @@ mod tests {
     #[test]
     fn test_call_multiple() {
         let mut num = 0;
-        let mut cl = |x|{num+=x;};
-        call_multiple!({||cl(1)}, 10);
+        let mut cl = |x| {
+            num += x;
+        };
+        call_multiple!({ || cl(1) }, 10);
         assert_eq!(num, 10);
         let mut num2 = 0;
-        let mut cl = |x|{num2+=x;};
+        let mut cl = |x| {
+            num2 += x;
+        };
         call_multiple!(cl, [1, 2, 3, 4]);
         assert_eq!(num2, 10);
     }
 
-
     #[test]
     fn test_csi_parser() {
         let res = CSICommand::parse(b"\x1B[109;109###Hasd").unwrap();
-        assert_eq!(res.0, CSICommand{
-            parameter_bytes: b"109;109".to_vec(),
-            intermediate_bytes: b"###".to_vec(),
-            final_byte: b'H',
-        });
+        assert_eq!(
+            res.0,
+            CSICommand {
+                parameter_bytes: b"109;109".to_vec(),
+                intermediate_bytes: b"###".to_vec(),
+                final_byte: b'H',
+            }
+        );
         assert_eq!(res.1, 13);
         let res = CSICommand::parse(b"109;109###Hasd").unwrap();
-        assert_eq!(res.0, CSICommand{
-            parameter_bytes: b"109;109".to_vec(),
-            intermediate_bytes: b"###".to_vec(),
-            final_byte: b'H',
-        });
+        assert_eq!(
+            res.0,
+            CSICommand {
+                parameter_bytes: b"109;109".to_vec(),
+                intermediate_bytes: b"###".to_vec(),
+                final_byte: b'H',
+            }
+        );
         assert_eq!(res.1, 11);
         let res = CSICommand::parse(b"\x1B[B").unwrap().0;
-        assert_eq!(res, CSICommand{
-            parameter_bytes: b"".to_vec(),
-            intermediate_bytes: b"".to_vec(),
-            final_byte: b'B',
-        });
+        assert_eq!(
+            res,
+            CSICommand {
+                parameter_bytes: b"".to_vec(),
+                intermediate_bytes: b"".to_vec(),
+                final_byte: b'B',
+            }
+        );
         let res = CSICommand::parse(b"\x1B[###~").unwrap().0;
-        assert_eq!(res, CSICommand{
-            parameter_bytes: b"".to_vec(),
-            intermediate_bytes: b"###".to_vec(),
-            final_byte: b'~',
-        });
+        assert_eq!(
+            res,
+            CSICommand {
+                parameter_bytes: b"".to_vec(),
+                intermediate_bytes: b"###".to_vec(),
+                final_byte: b'~',
+            }
+        );
     }
 
     #[test]
@@ -912,5 +953,4 @@ mod tests {
         list.push(CSICommand::parse(b"2~").unwrap().0, 57349);
         assert_eq!(list.match_csi(&csi), Some(57349));
     }
-
 }

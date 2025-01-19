@@ -57,7 +57,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nixtui-allocator"
+name = "nixtui"
 version = "0.1.0"
 
 [[package]]
@@ -65,7 +65,6 @@ name = "nixtui-core"
 version = "0.1.0"
 dependencies = [
  "nix",
- "nixtui-allocator",
  "terminfo",
  "thiserror",
 ]
