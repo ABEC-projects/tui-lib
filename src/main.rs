@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use nixtui::tty::Tty;
+use nixtui_core::tty::Tty;
 
 fn main() {
     test_tty_expand();
@@ -19,7 +19,7 @@ fn get_cap() {
 }
 
 fn debug_input() {
-    use nixtui::input::InputParser;
+    use nixtui_core::input::InputParser;
     let mut parser = InputParser::from_env().unwrap();
     parser.push_default();
     let mut tty = std::fs::File::open("/dev/tty").unwrap();
@@ -35,9 +35,9 @@ fn debug_input() {
 
 fn test_tty_expand() {
     let mut tty = Tty::new().unwrap();
-    tty.c_enter_ca_mode().unwrap();
+    tty.enter_ca_mode().unwrap();
     tty.move_cursor(10, 0).unwrap();
-    tty.write_all(b"Moved cursor to 0;10\r\n").unwrap();
+    tty.write_all(b"Moved cursor to 10;0\r\n").unwrap();
     tty.write_all(b"Hiding cursor\r\n").unwrap();
     tty.cursor_invisible().unwrap();
     std::thread::sleep(Duration::from_secs(2));
@@ -51,11 +51,6 @@ fn test_tty_expand() {
     std::thread::sleep(Duration::from_secs(2));
     tty.exit_attribute_modes().unwrap();
     tty.write_all(b"Modifiers reset\r\n").unwrap();
-    std::thread::sleep(Duration::from_secs(2));
-    tty.enter_secure_mode().unwrap();
-    tty.write_all(b"You should not see this").unwrap();
-    std::thread::sleep(Duration::from_secs(2));
-    tty.exit_attribute_modes().unwrap();
-    tty.write_all(b"You should see this").unwrap();
     std::thread::sleep(Duration::from_secs(3));
+    tty.exit_ca_mode().unwrap();
 }

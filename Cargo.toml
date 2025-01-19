@@ -1,8 +1,6 @@
-[workspace]
-members = ["nixtui-allocator"]
 
 [package]
-name = "nixtui"
+name = "nixtui-core"
 version = "0.1.0"
 edition = "2021"
 

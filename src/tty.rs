@@ -40,13 +40,13 @@ macro_rules! tty_expand_cap {
 
 pub type Result<T> = std::result::Result<T, TtyError>;
 
-pub struct Tty {
-    raw: File,
+pub struct Tty<IO: Write + Read + AsFd + 'static> {
+    raw: IO,
     orig_termios: Termios,
     db: terminfo::Database,
 }
 
-impl std::fmt::Debug for Tty {
+impl<IO: Write + Read + AsFd + std::fmt::Debug + 'static> std::fmt::Debug for Tty<IO> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Tty {
             raw,
@@ -61,7 +61,7 @@ impl std::fmt::Debug for Tty {
     }
 }
 
-impl Tty {
+impl Tty<File> {
     pub fn new() -> Result<Self> {
         let file = File::options().read(true).write(true).open("/dev/tty")?;
         let orig_termios = tcgetattr(file.as_fd())?;
@@ -71,7 +71,9 @@ impl Tty {
             db: terminfo::Database::from_env()?,
         })
     }
+}
 
+impl<IO: Read + Write + AsFd> Tty<IO> {
     pub fn get_termios(&mut self) -> Result<Termios> {
         Ok(tcgetattr(self.raw.as_fd())?)
     }
@@ -128,34 +130,39 @@ impl Tty {
     }
 
     pub fn move_cursor(&mut self, row: usize, col: usize) -> Result<()> {
-        tty_expand_cap!(&self.db, &self.raw, cap::CursorAddress, "CursorAddress"; row as i32, col as i32)
+        tty_expand_cap!(&self.db, &mut self.raw, cap::CursorAddress, "CursorAddress"; row as i32, col as i32)
     }
 
     pub fn cursor_invisible(&mut self) -> Result<()> {
-        tty_expand_cap!(self.db, &self.raw, cap::CursorInvisible, "CursorInvisible")
+        tty_expand_cap!(
+            self.db,
+            &mut self.raw,
+            cap::CursorInvisible,
+            "CursorInvisible"
+        )
     }
 
     pub fn cursor_very_visible(&mut self) -> Result<()> {
-        tty_expand_cap!(self.db, &self.raw, cap::CursorVisible, "CursorVisible")
+        tty_expand_cap!(self.db, &mut self.raw, cap::CursorVisible, "CursorVisible")
     }
 
     pub fn cursor_normal_visibility(&mut self) -> Result<()> {
-        tty_expand_cap!(self.db, &self.raw, cap::CursorNormal, "CursorNormal")
+        tty_expand_cap!(self.db, &mut self.raw, cap::CursorNormal, "CursorNormal")
     }
 
     pub fn clean(&mut self) -> Result<()> {
-        tty_expand_cap!(self.db, &self.raw, cap::ClearScreen, "ClearScreen")
+        tty_expand_cap!(self.db, &mut self.raw, cap::ClearScreen, "ClearScreen")
     }
 
     pub fn bell(&mut self) -> Result<()> {
-        tty_expand_cap!(self.db, &self.raw, cap::Bell, "Bell")
+        tty_expand_cap!(self.db, &mut self.raw, cap::Bell, "Bell")
     }
 
     /// Turns on underline mode
     pub fn underline(&mut self) -> Result<()> {
         tty_expand_cap!(
             self.db,
-            &self.raw,
+            &mut self.raw,
             cap::EnterUnderlineMode,
             "EnterUnderlineMode"
         )
@@ -165,7 +172,7 @@ impl Tty {
     pub fn exit_underline(&mut self) -> Result<()> {
         tty_expand_cap!(
             self.db,
-            &self.raw,
+            &mut self.raw,
             cap::ExitUnderlineMode,
             "ExitEnderlineMode"
         )
@@ -175,7 +182,7 @@ impl Tty {
     pub fn italics(&mut self) -> Result<()> {
         tty_expand_cap!(
             self.db,
-            &self.raw,
+            &mut self.raw,
             cap::EnterItalicsMode,
             "EnterItalicsMode"
         )
@@ -183,31 +190,46 @@ impl Tty {
 
     /// Exits italics mode
     pub fn exit_italics(&mut self) -> Result<()> {
-        tty_expand_cap!(self.db, &self.raw, cap::ExitItalicsMode, "ExitItalicsMode")
+        tty_expand_cap!(
+            self.db,
+            &mut self.raw,
+            cap::ExitItalicsMode,
+            "ExitItalicsMode"
+        )
     }
 
     /// Turns on bold mode
     pub fn bold(&mut self) -> Result<()> {
-        tty_expand_cap!(self.db, &self.raw, cap::EnterBoldMode, "EnterBoldMode")
+        tty_expand_cap!(self.db, &mut self.raw, cap::EnterBoldMode, "EnterBoldMode")
     }
 
     /// Exits all atribute modes, e. g. `self.bold()`
     pub fn exit_attribute_modes(&mut self) -> Result<()> {
         tty_expand_cap!(
             self.db,
-            &self.raw,
+            &mut self.raw,
             cap::ExitAttributeMode,
             "ExitAttributeMode"
         )
     }
 
     pub fn enter_secure_mode(&mut self) -> Result<()> {
-        tty_expand_cap!(self.db, &self.raw, cap::EnterSecureMode, "EnterSecureMode")
+        tty_expand_cap!(
+            self.db,
+            &mut self.raw,
+            cap::EnterSecureMode,
+            "EnterSecureMode"
+        )
     }
 
-    // pub fn exit_secure_mode(&mut self) -> Result<()> {
-    //     tty_expand_cap!(self.db, &self.raw, cap::ExitSec, "ExitSecureMode")
-    // }
+    pub fn enter_ca_mode(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &mut self.raw, cap::EnterCaMode, "EnterCaMode")
+    }
+
+    pub fn exit_ca_mode(&mut self) -> Result<()> {
+        tty_expand_cap!(self.db, &mut self.raw, cap::ExitCaMode, "ExitCaMode")
+    }
+
     pub fn size(&mut self) -> Result<nix::libc::winsize> {
         let mut buf = nix::libc::winsize {
             ws_row: 0,
@@ -215,7 +237,13 @@ impl Tty {
             ws_xpixel: 0,
             ws_ypixel: 0,
         };
-        unsafe { ioctl(self.raw.as_raw_fd(), nix::libc::TIOCGWINSZ, &mut buf) };
+        unsafe {
+            ioctl(
+                self.raw.as_fd().as_raw_fd(),
+                nix::libc::TIOCGWINSZ,
+                &mut buf,
+            )
+        };
         // todo! handle possible errors created by ioctl
         Ok(buf)
     }
@@ -228,13 +256,13 @@ impl Tty {
     }
 }
 
-impl Drop for Tty {
+impl<IO: Read + Write + AsFd> Drop for Tty<IO> {
     fn drop(&mut self) {
         let _ = self.write_orig_termios();
     }
 }
 
-impl Write for Tty {
+impl<IO: Read + Write + AsFd> Write for Tty<IO> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.raw.write(buf)
     }
@@ -258,7 +286,7 @@ impl Write for Tty {
     }
 }
 
-impl std::io::Read for Tty {
+impl<IO: Read + Write + AsFd> std::io::Read for Tty<IO> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.raw.read(buf)
     }
