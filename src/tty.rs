@@ -1,3 +1,6 @@
+pub mod errors;
+
+use errors::TtyCapabilityError;
 use nix::libc::ioctl;
 use nix::sys::termios::Termios;
 use nix::{
@@ -12,7 +15,6 @@ use std::{
     os::fd::{AsFd, AsRawFd},
 };
 use terminfo::capability as cap;
-use thiserror::Error;
 
 use crate::input::InputParser;
 
@@ -20,10 +22,14 @@ macro_rules! tty_expand_cap {
     ($db:expr, $write:expr, $path:path, $name:literal) => {
         {
             let Some(cap) = $db.get::<$path>() else {
-                return Err(TtyError::TerminfoEntryNotFound { name: $name });
+                return Err(TtyCapabilityError::CapabilityNotFound { cap_name: $name.into() });
             };
             if let Err(err) = cap.expand().to($write) {
-                return Err(terminfo_to_tty_error(err, $name));
+                use ::terminfo::Error as E;
+                return match err {
+                    E::Io(io_err) => Err(TtyCapabilityError::IoError(io_err)),
+                    _ => Err(TtyCapabilityError::CapabilityExpansionError),
+                }
             };
             Ok(())
         }
@@ -31,16 +37,18 @@ macro_rules! tty_expand_cap {
     ($db:expr, $write:expr, $path:path, $name:literal; $first_param:expr $(,$params:expr)*$(,)?) => {
         {
             let Some(cap) = $db.get::<$path>() else {
-                return Err(TtyError::TerminfoEntryNotFound { name: $name });
+                return Err(TtyCapabilityError::CapabilityNotFound { cap_name: $name.into() });
             };
             ::terminfo::expand!($write, cap.as_ref(); $first_param $(,$params)+ ).map_err(|e| {
-                terminfo_to_tty_error(e, $name)
+                use ::terminfo::Error as E;
+                match e {
+                    E::Io(io_err) => TtyCapabilityError::IoError(io_err),
+                    _ => TtyCapabilityError::CapabilityExpansionError,
+                }
             })
         }
     }
 }
-
-pub type Result<T> = std::result::Result<T, TtyError>;
 
 pub struct Tty<IO: Write + Read + AsFd + 'static = File> {
     raw: IO,
@@ -64,7 +72,7 @@ impl<IO: Write + Read + AsFd + std::fmt::Debug + 'static> std::fmt::Debug for Tt
 }
 
 impl Tty<File> {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Self, errors::TtyCreationError> {
         let file = File::options().read(true).write(true).open("/dev/tty")?;
         let orig_termios = tcgetattr(file.as_fd())?;
         Ok(Self {
@@ -76,16 +84,16 @@ impl Tty<File> {
 }
 
 impl<IO: Read + Write + AsFd> Tty<IO> {
-    pub fn get_termios(&mut self) -> Result<Termios> {
+    pub fn get_termios(&mut self) -> std::io::Result<Termios> {
         Ok(tcgetattr(self.raw.as_fd())?)
     }
 
-    pub fn write_termios(&mut self, termios: Termios, mode: SetArg) -> Result<()> {
+    pub fn write_termios(&mut self, termios: Termios, mode: SetArg) -> std::io::Result<()> {
         tcsetattr(self.raw.as_fd(), mode, &termios)?;
         Ok(())
     }
 
-    pub fn raw_mode(&mut self) -> Result<()> {
+    pub fn raw_mode(&mut self) -> std::io::Result<()> {
         let ttyfd = self.raw.as_fd();
         let mut termios = self.orig_termios.clone();
         // According to https://www.man7.org/linux/man-pages/man3/termios.3.html `Raw mode` section
@@ -117,7 +125,7 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
     }
 
     /// Restores the original termios settings
-    pub fn write_orig_termios(&mut self) -> Result<()> {
+    pub fn write_orig_termios(&mut self) -> std::io::Result<()> {
         Ok(tcsetattr(
             self.raw.as_fd(),
             SetArg::TCSAFLUSH,
@@ -125,17 +133,17 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
         )?)
     }
 
-    pub fn read_u8(&mut self) -> Result<u8> {
+    pub fn read_u8(&mut self) -> std::io::Result<u8> {
         let mut buf = [0; 1];
         self.read_exact(&mut buf)?;
         Ok(buf[0])
     }
 
-    pub fn move_cursor(&mut self, row: usize, col: usize) -> Result<()> {
+    pub fn move_cursor(&mut self, row: usize, col: usize) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(&self.db, &mut self.raw, cap::CursorAddress, "CursorAddress"; row as i32, col as i32)
     }
 
-    pub fn cursor_invisible(&mut self) -> Result<()> {
+    pub fn cursor_invisible(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(
             self.db,
             &mut self.raw,
@@ -144,24 +152,24 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
         )
     }
 
-    pub fn cursor_very_visible(&mut self) -> Result<()> {
+    pub fn cursor_very_visible(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(self.db, &mut self.raw, cap::CursorVisible, "CursorVisible")
     }
 
-    pub fn cursor_normal_visibility(&mut self) -> Result<()> {
+    pub fn cursor_normal_visibility(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(self.db, &mut self.raw, cap::CursorNormal, "CursorNormal")
     }
 
-    pub fn clean(&mut self) -> Result<()> {
+    pub fn clean(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(self.db, &mut self.raw, cap::ClearScreen, "ClearScreen")
     }
 
-    pub fn bell(&mut self) -> Result<()> {
+    pub fn bell(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(self.db, &mut self.raw, cap::Bell, "Bell")
     }
 
     /// Turns on underline mode
-    pub fn underline(&mut self) -> Result<()> {
+    pub fn underline(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(
             self.db,
             &mut self.raw,
@@ -171,7 +179,7 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
     }
 
     // Exits underline mode
-    pub fn exit_underline(&mut self) -> Result<()> {
+    pub fn exit_underline(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(
             self.db,
             &mut self.raw,
@@ -181,7 +189,7 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
     }
 
     /// Turns on italics mode
-    pub fn italics(&mut self) -> Result<()> {
+    pub fn italics(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(
             self.db,
             &mut self.raw,
@@ -191,7 +199,7 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
     }
 
     /// Exits italics mode
-    pub fn exit_italics(&mut self) -> Result<()> {
+    pub fn exit_italics(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(
             self.db,
             &mut self.raw,
@@ -201,11 +209,11 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
     }
 
     /// Turns on bold mode
-    pub fn bold(&mut self) -> Result<()> {
+    pub fn bold(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(self.db, &mut self.raw, cap::EnterBoldMode, "EnterBoldMode")
     }
 
-    pub fn reverse(&mut self) -> Result<()> {
+    pub fn reverse(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(
             self.db,
             &mut self.raw,
@@ -215,7 +223,7 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
     }
 
     /// Exits all atribute modes, e. g. `self.bold()`
-    pub fn exit_attribute_modes(&mut self) -> Result<()> {
+    pub fn exit_attribute_modes(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(
             self.db,
             &mut self.raw,
@@ -224,7 +232,7 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
         )
     }
 
-    pub fn enter_secure_mode(&mut self) -> Result<()> {
+    pub fn enter_secure_mode(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(
             self.db,
             &mut self.raw,
@@ -233,33 +241,36 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
         )
     }
 
-    pub fn enter_ca_mode(&mut self) -> Result<()> {
+    pub fn enter_ca_mode(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(self.db, &mut self.raw, cap::EnterCaMode, "EnterCaMode")
     }
 
-    pub fn exit_ca_mode(&mut self) -> Result<()> {
+    pub fn exit_ca_mode(&mut self) -> Result<(), TtyCapabilityError> {
         tty_expand_cap!(self.db, &mut self.raw, cap::ExitCaMode, "ExitCaMode")
     }
 
-    pub fn size(&mut self) -> Result<nix::libc::winsize> {
+    pub fn size(&mut self) -> std::io::Result<Winsize> {
         let mut buf = nix::libc::winsize {
             ws_row: 0,
             ws_col: 0,
             ws_xpixel: 0,
             ws_ypixel: 0,
         };
-        unsafe {
+        let ioctl_return = unsafe {
             ioctl(
                 self.raw.as_fd().as_raw_fd(),
                 nix::libc::TIOCGWINSZ,
                 &mut buf,
             )
         };
-        // todo! handle possible errors created by ioctl
-        Ok(buf)
+        if ioctl_return < 0 {
+            return Err(nix::errno::Errno::last().into());
+        }
+
+        Ok(buf.into())
     }
 
-    pub fn set_bg_16(&mut self, color: usize) -> Result<()> {
+    pub fn set_bg_16(&mut self, color: usize) -> std::io::Result<()> {
         assert!(color < 8, "Valid color codes are in 0..8");
         let buf = format!("\x1B[{}m", 40 + color);
         self.raw.write_all(buf.as_bytes())?;
@@ -268,6 +279,20 @@ impl<IO: Read + Write + AsFd> Tty<IO> {
 
     pub fn make_parser(&self) -> InputParser {
         InputParser::from_terminfo(&self.db)
+    }
+}
+
+pub struct Winsize {
+    pub col: u16,
+    pub row: u16,
+}
+
+impl From<nix::libc::winsize> for Winsize {
+    fn from(value: nix::libc::winsize) -> Self {
+        Self {
+            col: value.ws_col,
+            row: value.ws_row,
+        }
     }
 }
 
@@ -305,26 +330,4 @@ impl<IO: Read + Write + AsFd> std::io::Read for Tty<IO> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.raw.read(buf)
     }
-}
-
-fn terminfo_to_tty_error(error: terminfo::Error, entry_name: &'static str) -> TtyError {
-    use terminfo::Error;
-    match error {
-        Error::NotFound => TtyError::TerminfoEntryNotFound { name: entry_name },
-        Error::Io(err) => TtyError::IOError(err),
-        _ => TtyError::TerminfoError(error),
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum TtyError {
-    #[error(transparent)]
-    IOError(#[from] std::io::Error),
-    #[error("Error with terminfo database:\n\t`{0}`")]
-    TerminfoError(#[from] terminfo::Error),
-    #[error(transparent)]
-    Errno(#[from] nix::Error),
-    #[error("Capability `{name}` not found in terminfo database
-        This either means your terminal does not support this capability or the database is not complete")]
-    TerminfoEntryNotFound { name: &'static str },
 }
