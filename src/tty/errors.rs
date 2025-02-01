@@ -1,5 +1,5 @@
 #[derive(Debug, thiserror::Error)]
-pub enum TtyCreationError {
+pub enum TerminfoCreationError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
     #[error("Terminfo database not found on the machine.")]
@@ -8,13 +8,13 @@ pub enum TtyCreationError {
     TerminfoProcessingError,
 }
 
-impl From<nix::errno::Errno> for TtyCreationError {
+impl From<nix::errno::Errno> for TerminfoCreationError {
     fn from(value: nix::errno::Errno) -> Self {
         Self::IoError(value.into())
     }
 }
 
-impl From<terminfo::Error> for TtyCreationError {
+impl From<terminfo::Error> for TerminfoCreationError {
     fn from(value: terminfo::Error) -> Self {
         use terminfo::Error as Te;
         match value {
@@ -26,7 +26,7 @@ impl From<terminfo::Error> for TtyCreationError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum TtyCapabilityError {
+pub enum CapabilityError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
     #[error("Could not find capability `{cap_name}` in terminfo database.")]
@@ -37,7 +37,7 @@ pub enum TtyCapabilityError {
     CapabilityExpansionError,
 }
 
-impl From<nix::errno::Errno> for TtyCapabilityError {
+impl From<nix::errno::Errno> for CapabilityError {
     fn from(value: nix::errno::Errno) -> Self {
         Self::IoError(value.into())
     }
